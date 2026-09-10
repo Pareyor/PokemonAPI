@@ -116,3 +116,41 @@ export interface PokedexStats {
   missingSpecies: number;
   completionPercentage: number;
 }
+
+export type UserRole = 'USER' | 'ADMIN';
+
+export interface AuthUser {
+  id: number;
+  username: string;
+  role: UserRole;
+  trainerName: string;
+  coins: number;
+  token?: string;
+  createdAt?: string;
+}
+
+export interface UserManagementDTO {
+  id: number;
+  username: string;
+  role: UserRole;
+  trainerName: string;
+  coins: number;
+  createdAt?: string;
+}
+
+export interface CreateUserRequest {
+  username: string;
+  password?: string;
+  trainerName: string;
+  role: UserRole;
+  coins?: number;
+}
+
+export interface UpdateUserRequest {
+  username?: string;
+  password?: string;
+  trainerName?: string;
+  role?: UserRole;
+  coins?: number;
+}
+

@@ -1,8 +1,18 @@
 import React from 'react';
 import { PokemonCard, PokemonType, CardRarity } from '../types';
-import { Shield, Swords, Zap, Heart, Sparkles, Plus, Check, Trash2, ArrowUpCircle } from 'lucide-react';
+import { Shield, Swords, Zap, Heart, Sparkles, Plus, Check, Trash2, ArrowUpCircle, Eye } from 'lucide-react';
 
 export type CardAspect = 'classic' | 'holo' | 'cosmos' | 'animated' | 'gold';
+
+export const getCardAspect = (card: PokemonCard): CardAspect => {
+  if (card.rarity === 'LEGENDARY' && card.isHolo) return 'animated';
+  if (card.rarity === 'EPIC' && card.isHolo) return 'holo';
+  if (card.rarity === 'LEGENDARY') return 'cosmos';
+  if (card.rarity === 'EPIC') return 'cosmos';
+  if (card.rarity === 'RARE' && card.isHolo) return 'gold';
+  if (card.isHolo) return 'holo';
+  return 'classic';
+};
 
 interface PokemonCardViewProps {
   card: PokemonCard;
@@ -108,9 +118,10 @@ export const PokemonCardView: React.FC<PokemonCardViewProps> = ({
   const [isAttackingScreen, setIsAttackingScreen] = React.useState(false);
   const theme = typeThemes[card.type] || typeThemes.NORMAL;
   const rarity = rarityBadges[card.rarity];
+  const resolvedAspect = aspect !== undefined ? aspect : getCardAspect(card);
 
   const handleArtworkClick = (e: React.MouseEvent) => {
-    if (aspect === 'animated') {
+    if (resolvedAspect === 'animated') {
       e.stopPropagation();
       if (!isAttackingScreen) {
         setIsAttackingScreen(true);
@@ -124,17 +135,16 @@ export const PokemonCardView: React.FC<PokemonCardViewProps> = ({
 
   // Aspect CSS class calculation
   const getAspectClass = () => {
-    if (aspect === 'holo') return 'card-aspect-holo shadow-2xl shadow-amber-500/30';
-    if (aspect === 'cosmos') return 'card-aspect-cosmos shadow-lg shadow-amber-500/30';
-    if (aspect === 'animated') return 'card-aspect-animated shadow-xl shadow-cyan-500/30';
-    if (aspect === 'gold') return 'card-aspect-gold shadow-xl shadow-yellow-500/40';
-    if (aspect === 'classic') return 'shadow-md';
+    if (resolvedAspect === 'holo') return 'card-aspect-holo shadow-2xl shadow-amber-500/30';
+    if (resolvedAspect === 'cosmos') return 'card-aspect-cosmos shadow-lg shadow-amber-500/30';
+    if (resolvedAspect === 'animated') return 'card-aspect-animated shadow-xl shadow-cyan-500/30';
+    if (resolvedAspect === 'gold') return 'card-aspect-gold shadow-xl shadow-yellow-500/40';
+    if (resolvedAspect === 'classic') return 'shadow-md';
     return card.isHolo ? 'holo-card shadow-lg shadow-purple-500/15' : 'shadow-md';
   };
 
   return (
     <div
-      onClick={aspect === 'animated' ? handleArtworkClick : undefined}
       className={`group relative rounded-2xl bg-gradient-to-b ${theme.bg} border-2 ${theme.border} ${getAspectClass()} p-3.5 flex flex-col justify-between transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl`}
     >
       {/* Deck Indicator Pill */}
@@ -145,8 +155,12 @@ export const PokemonCardView: React.FC<PokemonCardViewProps> = ({
       )}
 
       {/* Top Header: Name, Level, HP, Type */}
-      <div>
-        {aspect === 'holo' ? (
+      <div
+        className={onView ? 'cursor-pointer select-none' : undefined}
+        onClick={onView ? () => onView(card) : undefined}
+        title={onView ? 'Clic para inspeccionar aspectos y detalles' : undefined}
+      >
+        {resolvedAspect === 'holo' ? (
           <div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
@@ -198,26 +212,26 @@ export const PokemonCardView: React.FC<PokemonCardViewProps> = ({
             isAttackingScreen ? 'ring-2 ring-cyan-400 shadow-2xl' : 'group-hover:border-slate-700'
           }`}
         >
-          {aspect === 'gold' ? (
+          {resolvedAspect === 'gold' ? (
             <div className="absolute top-1 left-1.5 z-10 flex items-center gap-0.5 text-[9px] font-extrabold text-yellow-300 bg-yellow-950/90 px-1.5 py-0.5 rounded border border-yellow-400/60 shadow">
               <Sparkles className="w-2.5 h-2.5" /> ORO 24K
             </div>
-          ) : aspect === 'animated' ? (
+          ) : resolvedAspect === 'animated' ? (
             <div className="absolute top-1 left-1.5 z-10 flex items-center gap-0.5 text-[9px] font-extrabold text-cyan-300 bg-cyan-950/90 px-1.5 py-0.5 rounded border border-cyan-400/60 shadow animate-pulse">
               <Zap className="w-2.5 h-2.5" /> LIVE ANIMADA
             </div>
-          ) : aspect === 'cosmos' ? (
+          ) : resolvedAspect === 'cosmos' ? (
             <div className="absolute top-1 left-1.5 z-10 flex items-center gap-0.5 text-[9px] font-extrabold text-white bg-slate-900/90 px-1.5 py-0.5 rounded border border-white/80 shadow">
               <Sparkles className="w-2.5 h-2.5 text-yellow-300" /> ULTRABRILLANTE
             </div>
-          ) : (aspect === 'holo' || card.isHolo) ? (
+          ) : (resolvedAspect === 'holo' || card.isHolo) ? (
             <div className="absolute top-1 left-1.5 z-10 flex items-center gap-0.5 text-[9px] font-extrabold text-amber-300 bg-amber-950/90 px-1.5 py-0.5 rounded border border-amber-400/70 shadow">
               <Sparkles className="w-2.5 h-2.5 text-amber-300" /> MEGA EX
             </div>
           ) : null}
 
           {/* Mega EX Lightning bolts & 3D Japanese Katakana signature typography */}
-          {aspect === 'holo' && (
+          {resolvedAspect === 'holo' && (
             <>
               <div className="absolute top-1 left-2 text-cyan-300 text-lg lightning-bolt select-none pointer-events-none z-20">
                 ⚡
@@ -239,7 +253,7 @@ export const PokemonCardView: React.FC<PokemonCardViewProps> = ({
           )}
 
           {/* Shiny Star Sparkle Flares for Ultrabrillante aspect */}
-          {aspect === 'cosmos' && (
+          {resolvedAspect === 'cosmos' && (
             <>
               <div className="absolute top-2 right-4 z-20 text-white font-black text-xl drop-shadow-[0_0_8px_rgba(255,255,255,0.9)] animate-pulse pointer-events-none select-none">
                 ✦
@@ -270,7 +284,7 @@ export const PokemonCardView: React.FC<PokemonCardViewProps> = ({
           {/* Pokemon Artwork / Live Animated Sprite */}
           <img
             src={
-              aspect === 'animated'
+              resolvedAspect === 'animated'
                 ? `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/showdown/${card.pokedexNumber}.gif`
                 : card.imageUrl
             }
@@ -281,9 +295,9 @@ export const PokemonCardView: React.FC<PokemonCardViewProps> = ({
             className={`h-full max-h-28 object-contain filter drop-shadow-[0_8px_16px_rgba(0,0,0,0.6)] ${
               isAttackingScreen
                 ? 'animate-screen-attack'
-                : aspect === 'animated'
+                : resolvedAspect === 'animated'
                 ? 'scale-110 drop-shadow-[0_0_15px_rgba(0,240,255,0.8)] animate-float'
-                : aspect === 'holo'
+                : resolvedAspect === 'holo'
                 ? 'scale-110 drop-shadow-[0_0_20px_rgba(245,158,11,0.7)]'
                 : 'group-hover:scale-110'
             } transition-transform duration-300 relative z-20`}
@@ -295,7 +309,7 @@ export const PokemonCardView: React.FC<PokemonCardViewProps> = ({
         </div>
 
         {/* Moves / Powers Box */}
-        {aspect === 'holo' ? (
+        {resolvedAspect === 'holo' ? (
           <div className="space-y-1.5 text-xs">
             {/* Mega Evolution Rule Ribbon */}
             <div className="px-2 py-0.5 rounded bg-gradient-to-r from-amber-950 via-slate-900 to-amber-950 border-y border-amber-500/60 text-[8px] text-amber-200 flex items-center justify-between">
@@ -379,13 +393,24 @@ export const PokemonCardView: React.FC<PokemonCardViewProps> = ({
         </div>
       </div>
 
-      {/* Footer Actions: Deck Toggle, Level Up, Delete */}
+      {/* Footer Actions: View, Deck Toggle, Level Up, Delete */}
       <div className="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-xs">
         <span className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${rarity.color}`}>
           {rarity.label}
         </span>
 
         <div className="flex items-center space-x-1.5">
+          {onView && (
+            <button
+              onClick={() => onView(card)}
+              title="Inspeccionar aspecto y detalles de la carta"
+              className="p-1.5 text-sky-400 hover:text-white bg-sky-500/10 hover:bg-sky-600 rounded-lg transition-colors flex items-center gap-1 text-[10px] font-bold border border-sky-500/30"
+            >
+              <Eye className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Ver</span>
+            </button>
+          )}
+
           {onLevelUp && (
             <button
               onClick={() => onLevelUp(card)}

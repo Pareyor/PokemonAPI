@@ -1,21 +1,27 @@
 import React from 'react';
-import { TrainerProfile } from '../types';
-import { Coins, Swords, Gift, Sparkles, ExternalLink, Flame, BookOpen } from 'lucide-react';
+import { TrainerProfile, AuthUser } from '../types';
+import { Coins, Swords, Gift, Sparkles, ExternalLink, Flame, BookOpen, Shield, LogIn, LogOut } from 'lucide-react';
 
 interface NavbarProps {
   profile: TrainerProfile | null;
+  currentUser: AuthUser | null;
   onClaimBonus: () => void;
   onOpenBoosterShop: () => void;
   onOpenCardCreator: () => void;
+  onOpenLogin: () => void;
+  onLogout: () => void;
   activeTab: string;
-  onSelectTab: (tab: 'album' | 'pokedex' | 'arena' | 'packs') => void;
+  onSelectTab: (tab: 'album' | 'pokedex' | 'arena' | 'packs' | 'admin') => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   profile,
+  currentUser,
   onClaimBonus,
   onOpenBoosterShop,
   onOpenCardCreator,
+  onOpenLogin,
+  onLogout,
   activeTab,
   onSelectTab,
 }) => {
@@ -94,6 +100,20 @@ export const Navbar: React.FC<NavbarProps> = ({
               <Sparkles className="w-3.5 h-3.5" />
               <span>Tienda Sobres</span>
             </button>
+
+            {currentUser?.role === 'ADMIN' && (
+              <button
+                onClick={() => onSelectTab('admin')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-black flex items-center gap-1.5 transition-all ${
+                  activeTab === 'admin'
+                    ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-900/50'
+                    : 'text-amber-300 hover:text-white hover:bg-amber-500/10'
+                }`}
+              >
+                <Shield className="w-3.5 h-3.5" />
+                <span>👑 Panel Admin</span>
+              </button>
+            )}
           </nav>
 
           {/* Trainer Stats & CTAs */}
@@ -138,6 +158,45 @@ export const Navbar: React.FC<NavbarProps> = ({
               <Flame className="w-3.5 h-3.5" />
               <span>Forjar Carta</span>
             </button>
+
+            {/* User Session & Auth Controls */}
+            {currentUser ? (
+              <div className="flex items-center gap-2 pl-2 border-l border-slate-700/60">
+                <div className="hidden md:flex flex-col items-end">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-black text-white">{currentUser.trainerName || currentUser.username}</span>
+                    <span
+                      className={`text-[9px] font-black px-1.5 py-0.2 rounded-full border ${
+                        currentUser.role === 'ADMIN'
+                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                          : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
+                      }`}
+                    >
+                      {currentUser.role === 'ADMIN' ? 'ADMIN' : 'ENTRENADOR'}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-400">@{currentUser.username}</span>
+                </div>
+
+                <button
+                  onClick={onLogout}
+                  title="Cerrar Sesión"
+                  className="p-2 rounded-xl bg-slate-800 hover:bg-rose-950/60 text-slate-400 hover:text-rose-300 border border-slate-700 hover:border-rose-500/40 transition-colors"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="pl-2 border-l border-slate-700/60">
+                <button
+                  onClick={onOpenLogin}
+                  className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-black text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-md shadow-emerald-950/40 active:scale-95 transition-all"
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>Iniciar Sesión</span>
+                </button>
+              </div>
+            )}
 
             {/* Swagger link */}
             <a

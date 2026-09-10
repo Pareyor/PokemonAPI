@@ -19,23 +19,54 @@ public class DataSeeder implements CommandLineRunner {
     private final PokemonCardRepository cardRepository;
     private final TrainerProfileRepository profileRepository;
     private final PokedexEntryRepository pokedexRepository;
+    private final com.pokepulse.repository.UserRepository userRepository;
+    private final com.pokepulse.service.AuthService authService;
 
     public DataSeeder(PokemonCardRepository cardRepository,
                       TrainerProfileRepository profileRepository,
-                      PokedexEntryRepository pokedexRepository) {
+                      PokedexEntryRepository pokedexRepository,
+                      com.pokepulse.repository.UserRepository userRepository,
+                      com.pokepulse.service.AuthService authService) {
         this.cardRepository = cardRepository;
         this.profileRepository = profileRepository;
         this.pokedexRepository = pokedexRepository;
+        this.userRepository = userRepository;
+        this.authService = authService;
     }
 
     @Override
     public void run(String... args) {
+        // 0. Seed Users (Admin y Entrenador)
+        if (userRepository.count() == 0) {
+            // Usuario Administrador: admin / admin123
+            AppUser admin = new AppUser(
+                "admin",
+                authService.hashPassword("admin123"),
+                UserRole.ADMIN,
+                "Profesor Oak",
+                9999
+            );
+            userRepository.save(admin);
+
+            // Usuario Estándar: entrenador / pokemon123
+            AppUser user = new AppUser(
+                "entrenador",
+                authService.hashPassword("pokemon123"),
+                UserRole.USER,
+                "Ash Ketchum",
+                800
+            );
+            userRepository.save(user);
+
+            log.info("Usuarios iniciales creados: 'admin' (ADMIN, pass: admin123) y 'entrenador' (USER, pass: pokemon123).");
+        }
+
         // 1. Seed Trainer Profile
         if (profileRepository.count() == 0) {
             TrainerProfile profile = new TrainerProfile("Ash Ketchum");
-            profile.setCoins(500);
+            profile.setCoins(800);
             profileRepository.save(profile);
-            log.info("Perfil de entrenador creado: Ash Ketchum con 500 PokéMonedas.");
+            log.info("Perfil de entrenador creado: Ash Ketchum con 800 PokéMonedas.");
         }
 
         // 2. Seed All Pokédex Entries (Gen 1 + extra Pokémon from booster pool)

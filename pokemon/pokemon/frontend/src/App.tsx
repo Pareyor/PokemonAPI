@@ -1,18 +1,31 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { PokemonCard, PokemonCardFormData, TrainerProfile, BattleOpponent, PokemonType, CardRarity } from './types';
+import { PokemonCard, PokemonCardFormData, TrainerProfile, BattleOpponent, PokemonType, CardRarity, AuthUser } from './types';
 import { api } from './services/api';
 import { Navbar } from './components/Navbar';
-import { PokemonCardView } from './components/PokemonCardView';
+import { PokemonCardView, CardAspect, getCardAspect } from './components/PokemonCardView';
 import { BoosterPackModal } from './components/BoosterPackModal';
 import { BattleArena } from './components/BattleArena';
 import { CardCreatorModal } from './components/CardCreatorModal';
 import { CardDetailModal } from './components/CardDetailModal';
 import { PokedexView } from './components/PokedexView';
+import { LoginModal } from './components/LoginModal';
+import { AdminUsersView } from './components/AdminUsersView';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { Search, Filter, Sparkles, Swords } from 'lucide-react';
 
 export const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'album' | 'pokedex' | 'arena' | 'packs'>('album');
+  const [activeTab, setActiveTab] = useState<'album' | 'pokedex' | 'arena' | 'packs' | 'admin'>('album');
+
+  // Autenticación de Usuario / Admin
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
+    try {
+      const saved = localStorage.getItem('pokepulse_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
 
   // Core Data
   const [cards, setCards] = useState<PokemonCard[]>([]);
@@ -27,6 +40,7 @@ export const App: React.FC = () => {
   const [typeFilter, setTypeFilter] = useState<PokemonType | ''>('');
   const [rarityFilter, setRarityFilter] = useState<CardRarity | ''>('');
   const [onlyDeckFilter, setOnlyDeckFilter] = useState(false);
+  const [aspectFilter, setAspectFilter] = useState<CardAspect | 'auto'>('auto');
 
   // Modals
   const [isPackOpen, setIsPackOpen] = useState(false);
@@ -81,6 +95,43 @@ export const App: React.FC = () => {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Verificar sesión activa
+  useEffect(() => {
+    if (api.getAuthToken()) {
+      api.getMe()
+        .then((user) => {
+          setCurrentUser(user);
+          localStorage.setItem('pokepulse_user', JSON.stringify(user));
+        })
+        .catch(() => {
+          api.logout();
+          setCurrentUser(null);
+          localStorage.removeItem('pokepulse_user');
+        });
+    }
+  }, []);
+
+  const handleLoginSuccess = (user: AuthUser) => {
+    setCurrentUser(user);
+    localStorage.setItem('pokepulse_user', JSON.stringify(user));
+    addToast(
+      'success',
+      `¡Bienvenido, ${user.trainerName || user.username}!`,
+      `Sesión iniciada con éxito como ${user.role === 'ADMIN' ? 'Administrador 👑' : 'Entrenador ⚡'}.`
+    );
+    loadData();
+  };
+
+  const handleLogout = async () => {
+    await api.logout();
+    setCurrentUser(null);
+    localStorage.removeItem('pokepulse_user');
+    if (activeTab === 'admin') {
+      setActiveTab('album');
+    }
+    addToast('info', 'Sesión Finalizada', 'Has cerrado tu sesión.');
+  };
 
   // Handler: Toggle Deck
   const handleToggleDeck = async (card: PokemonCard) => {
@@ -193,12 +244,15 @@ export const App: React.FC = () => {
       {/* Top Navbar */}
       <Navbar
         profile={profile}
+        currentUser={currentUser}
         onClaimBonus={handleClaimBonus}
         onOpenBoosterShop={() => setIsPackOpen(true)}
         onOpenCardCreator={() => {
           setCardToEdit(null);
           setIsCreatorOpen(true);
         }}
+        onOpenLogin={() => setIsLoginOpen(true)}
+        onLogout={handleLogout}
         activeTab={activeTab}
         onSelectTab={setActiveTab}
       />
@@ -290,6 +344,24 @@ export const App: React.FC = () => {
                   <option value="LEGENDARY">Legendaria ★★★</option>
                 </select>
 
+                {/* Aspect Selector for Collection */}
+                <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-950/80 border border-slate-800">
+                  <Sparkles className="w-3.5 h-3.5 text-[#FFCB05]" />
+                  <span className="text-xs font-bold text-slate-400">Aspecto:</span>
+                  <select
+                    value={aspectFilter}
+                    onChange={(e) => setAspectFilter(e.target.value as CardAspect | 'auto')}
+                    className="bg-transparent text-xs font-black text-amber-300 focus:outline-none cursor-pointer"
+                  >
+                    <option value="auto" className="bg-slate-900 text-slate-200">✨ Auto (Por rareza)</option>
+                    <option value="animated" className="bg-slate-900 text-cyan-300">⚡ Live Animada (GIFs)</option>
+                    <option value="holo" className="bg-slate-900 text-amber-300">🔥 Mega EX Full Art</option>
+                    <option value="cosmos" className="bg-slate-900 text-white">✦ Ultrabrillante Shiny</option>
+                    <option value="gold" className="bg-slate-900 text-yellow-300">👑 Oro 24K Secret</option>
+                    <option value="classic" className="bg-slate-900 text-slate-300">🎴 Clásica Mate</option>
+                  </select>
+                </div>
+
                 <button
                   onClick={() => setOnlyDeckFilter(!onlyDeckFilter)}
                   className={`px-3 py-2 rounded-xl text-xs font-bold border transition-colors ${
@@ -301,13 +373,14 @@ export const App: React.FC = () => {
                   Solo en Mazo
                 </button>
 
-                {(search || typeFilter || rarityFilter || onlyDeckFilter) && (
+                {(search || typeFilter || rarityFilter || onlyDeckFilter || aspectFilter !== 'auto') && (
                   <button
                     onClick={() => {
                       setSearch('');
                       setTypeFilter('');
                       setRarityFilter('');
                       setOnlyDeckFilter(false);
+                      setAspectFilter('auto');
                     }}
                     className="px-3 py-2 text-xs text-slate-400 hover:text-white bg-slate-800 rounded-xl transition-colors"
                   >
@@ -343,6 +416,7 @@ export const App: React.FC = () => {
                   <PokemonCardView
                     key={card.id}
                     card={card}
+                    aspect={aspectFilter === 'auto' ? getCardAspect(card) : aspectFilter}
                     onToggleDeck={handleToggleDeck}
                     onLevelUp={handleLevelUp}
                     onView={(c) => {
@@ -394,6 +468,11 @@ export const App: React.FC = () => {
             />
           </div>
         )}
+
+        {/* TAB 5: PANEL ADMIN (GESTIÓN DE USUARIOS) */}
+        {activeTab === 'admin' && currentUser?.role === 'ADMIN' && (
+          <AdminUsersView currentUser={currentUser} />
+        )}
       </main>
 
       <footer className="border-t border-[#CC0000]/20 py-6 text-center text-xs text-blue-300/40"
@@ -426,6 +505,7 @@ export const App: React.FC = () => {
       <CardDetailModal
         card={detailCard}
         isOpen={isDetailOpen}
+        initialAspect={aspectFilter}
         onClose={() => setIsDetailOpen(false)}
         onEdit={(c) => {
           setIsDetailOpen(false);
@@ -434,6 +514,13 @@ export const App: React.FC = () => {
         }}
         onToggleDeck={handleToggleDeck}
         onLevelUp={handleLevelUp}
+      />
+
+      {/* Auth / Login Modal */}
+      <LoginModal
+        isOpen={isLoginOpen}
+        onClose={() => setIsLoginOpen(false)}
+        onLoginSuccess={handleLoginSuccess}
       />
 
       {/* Toasts Container */}

@@ -1,27 +1,7 @@
 import React, { useState } from 'react';
 import { BoosterPackResult, PokemonCard } from '../types';
-import { PokemonCardView, CardAspect } from './PokemonCardView';
+import { PokemonCardView, getCardAspect } from './PokemonCardView';
 import { Sparkles, X, Coins, ShieldCheck, Scissors, ChevronRight, Layers, RotateCcw } from 'lucide-react';
-
-/**
- * Determina el aspecto visual de una carta según su rareza e isHolo.
- * – LEGENDARY + Holo  → 'animated'  (sprite vivo + animación ataque a pantalla)
- * – EPIC + Holo       → 'holo'      (Full Art Mega EX foil arcoíris)
- * – LEGENDARY         → 'cosmos'    (Ultrabrillante estrellado)
- * – EPIC              → 'cosmos'    (brillo prisma suave)
- * – RARE + Holo       → 'gold'      (Carta Oro 24K)
- * – Cualquier Holo    → 'holo'
- * – El resto          → 'classic'
- */
-const getCardAspect = (card: PokemonCard): CardAspect => {
-  if (card.rarity === 'LEGENDARY' && card.isHolo) return 'animated';
-  if (card.rarity === 'EPIC' && card.isHolo) return 'holo';
-  if (card.rarity === 'LEGENDARY') return 'cosmos';
-  if (card.rarity === 'EPIC') return 'cosmos';
-  if (card.rarity === 'RARE' && card.isHolo) return 'gold';
-  if (card.isHolo) return 'holo';
-  return 'classic';
-};
 
 interface BoosterPackModalProps {
   isOpen: boolean;

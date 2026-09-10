@@ -3,6 +3,7 @@ package com.pokepulse.service;
 import com.pokepulse.dto.BoosterPackResultDTO;
 import com.pokepulse.dto.PokemonCardResponseDTO;
 import com.pokepulse.entity.*;
+import com.pokepulse.repository.PokedexEntryRepository;
 import com.pokepulse.repository.PokemonCardRepository;
 import com.pokepulse.repository.TrainerProfileRepository;
 import org.springframework.stereotype.Service;
@@ -16,12 +17,17 @@ public class BoosterPackService {
     private final PokemonCardRepository cardRepository;
     private final TrainerProfileRepository profileRepository;
     private final CardService cardService;
+    private final PokedexEntryRepository pokedexRepository;
     private final Random random = new Random();
 
-    public BoosterPackService(PokemonCardRepository cardRepository, TrainerProfileRepository profileRepository, CardService cardService) {
+    public BoosterPackService(PokemonCardRepository cardRepository,
+                              TrainerProfileRepository profileRepository,
+                              CardService cardService,
+                              PokedexEntryRepository pokedexRepository) {
         this.cardRepository = cardRepository;
         this.profileRepository = profileRepository;
         this.cardService = cardService;
+        this.pokedexRepository = pokedexRepository;
     }
 
     private record CardArchetype(
@@ -124,6 +130,154 @@ public class BoosterPackService {
         new CardArchetype(1008,"Miraidon",PokemonType.ELECTRIC,CardRarity.LEGENDARY,185,135,115,135,"Carga Eléctrica",80,"Descarga electromagnética","Electrocañón",150,"Cañón de energía del futuro","PARALYZE")
     );
 
+    private static final Set<Integer> LEGENDARY_NUMBERS = Set.of(
+        // Gen 1
+        144, 145, 146, 150, 151,
+        // Gen 2
+        243, 244, 245, 249, 250, 251,
+        // Gen 3
+        377, 378, 379, 380, 381, 382, 383, 384, 385, 386,
+        // Gen 4
+        480, 481, 482, 483, 484, 485, 486, 487, 488, 490, 491, 492, 493,
+        // Gen 5
+        494, 638, 639, 640, 641, 642, 643, 644, 645, 646, 647, 648, 649,
+        // Gen 6
+        716, 717, 718, 719, 720, 721,
+        // Gen 7
+        785, 786, 787, 788, 789, 790, 791, 792, 793, 794, 795, 796, 797, 798, 799, 800, 801, 802, 804, 807, 808, 809,
+        // Gen 8
+        888, 889, 890, 891, 892, 893, 894, 895, 896, 897, 898,
+        // Gen 9
+        905, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1010, 1017, 1024, 1025
+    );
+
+    /**
+     * Obtiene el pool completo de cartas para sobres.
+     * Combina los arquetipos diseñados artesanalmente con todas las especies registradas en la Pokédex,
+     * garantizando que el 100% de los Pokémon de la Pokédex puedan salir en los sobres.
+     */
+    public List<CardArchetype> getAllArchetypes() {
+        Map<Integer, CardArchetype> map = new LinkedHashMap<>();
+        // 1. Cargar arquetipos detallados prioritarios
+        for (CardArchetype arch : POOL) {
+            map.put(arch.num(), arch);
+        }
+        // 2. Incorporar cualquier Pokémon de la Pokédex no presente en el mapa
+        List<PokedexEntry> entries = pokedexRepository.findAll();
+        for (PokedexEntry entry : entries) {
+            if (!map.containsKey(entry.getPokedexNumber())) {
+                map.put(entry.getPokedexNumber(), buildArchetypeFromPokedex(entry));
+            }
+        }
+        return new ArrayList<>(map.values());
+    }
+
+    private CardArchetype buildArchetypeFromPokedex(PokedexEntry entry) {
+        int num = entry.getPokedexNumber();
+        String name = entry.getName();
+        PokemonType type = entry.getPrimaryType();
+        int hp = entry.getBaseHp() != null ? entry.getBaseHp() : 100;
+        int atk = entry.getBaseAttack() != null ? entry.getBaseAttack() : 70;
+        int def = entry.getBaseDefense() != null ? entry.getBaseDefense() : 65;
+        int spd = entry.getBaseSpeed() != null ? entry.getBaseSpeed() : 70;
+
+        CardRarity rarity = determineRarity(num, hp, atk, def, spd);
+
+        String m1Name = defaultMove1Name(type);
+        int m1Dmg = Math.max(30, (int) (atk * 0.45));
+        String m1Desc = "Ataque rápido de tipo " + type + " ejecutado por " + name;
+
+        String m2Name = defaultMove2Name(type, name);
+        int m2Dmg = Math.max(65, (int) (atk * 0.95));
+        String m2Desc = "Poder elemental devastador de " + name;
+        String m2Effect = defaultSpecialEffect(type);
+
+        return new CardArchetype(num, name, type, rarity, hp, atk, def, spd,
+            m1Name, m1Dmg, m1Desc, m2Name, m2Dmg, m2Desc, m2Effect);
+    }
+
+    private CardRarity determineRarity(int num, int hp, int atk, int def, int spd) {
+        if (LEGENDARY_NUMBERS.contains(num)) {
+            return CardRarity.LEGENDARY;
+        }
+        int total = hp + atk + def + spd;
+        if (total >= 420) return CardRarity.EPIC;
+        if (total >= 340) return CardRarity.RARE;
+        if (total >= 250) return CardRarity.UNCOMMON;
+        return CardRarity.COMMON;
+    }
+
+    private String defaultMove1Name(PokemonType type) {
+        return switch (type) {
+            case FIRE -> "Ascuas";
+            case WATER -> "Pistola Agua";
+            case GRASS -> "Látigo Cepa";
+            case ELECTRIC -> "Chispa Eléctrica";
+            case PSYCHIC -> "Confusión Mental";
+            case FIGHTING -> "Golpe Marcial";
+            case DRAGON -> "Dragoaliento";
+            case DARK -> "Mordisco Furtivo";
+            case STEEL -> "Garra Metal";
+            case NORMAL -> "Placaje Veloz";
+        };
+    }
+
+    private String defaultMove2Name(PokemonType type, String name) {
+        return switch (type) {
+            case FIRE -> "Llamarada Ígnea";
+            case WATER -> "Hidrobomba Titánica";
+            case GRASS -> "Rayo Solar Floral";
+            case ELECTRIC -> "Trueno Descomunal";
+            case PSYCHIC -> "Psicoexplosión Cósmica";
+            case FIGHTING -> "Furia Cuerpo a Cuerpo";
+            case DRAGON -> "Cometa Draco Definitivo";
+            case DARK -> "Pulso Umbrío Espectral";
+            case STEEL -> "Cañón Destello Pesado";
+            case NORMAL -> "Hiperrayo Fulminante";
+        };
+    }
+
+    private String defaultSpecialEffect(PokemonType type) {
+        return switch (type) {
+            case FIRE -> "BURN";
+            case WATER -> "CRITICAL";
+            case GRASS -> "HEAL";
+            case ELECTRIC -> "PARALYZE";
+            case PSYCHIC -> "CRITICAL";
+            case FIGHTING -> "CRITICAL";
+            case DRAGON -> "CRITICAL";
+            case DARK -> "PARALYZE";
+            case STEEL -> "CRITICAL";
+            case NORMAL -> "HEAL";
+        };
+    }
+
+    private CardArchetype pickCardWithRarityWeights(List<CardArchetype> pool) {
+        int roll = random.nextInt(100);
+        CardRarity target;
+        if (roll < 45) {
+            target = CardRarity.COMMON;
+        } else if (roll < 75) {
+            target = CardRarity.UNCOMMON;
+        } else if (roll < 90) {
+            target = CardRarity.RARE;
+        } else if (roll < 97) {
+            target = CardRarity.EPIC;
+        } else {
+            target = CardRarity.LEGENDARY;
+        }
+
+        final CardRarity searchRarity = target;
+        List<CardArchetype> candidates = pool.stream()
+            .filter(a -> a.rarity() == searchRarity)
+            .toList();
+
+        if (!candidates.isEmpty()) {
+            return candidates.get(random.nextInt(candidates.size()));
+        }
+        return pool.get(random.nextInt(pool.size()));
+    }
+
     @Transactional
     public BoosterPackResultDTO openPack(String packType) {
         TrainerProfile profile = profileRepository.findFirstByOrderByIdAsc()
@@ -163,40 +317,62 @@ public class BoosterPackService {
         profile.setPacksOpened(profile.getPacksOpened() + 1);
         profileRepository.save(profile);
 
+        List<CardArchetype> fullPool = getAllArchetypes();
+        if (fullPool.isEmpty()) {
+            fullPool = POOL;
+        }
+
         List<PokemonCard> generatedCards = new ArrayList<>();
 
         for (int i = 0; i < cardCount; i++) {
             CardArchetype arch;
             if (i == 0 && minRarity != CardRarity.COMMON) {
-                // Guaranteed rarity
-                List<CardArchetype> filtered = POOL.stream()
-                    .filter(a -> a.rarity.ordinal() >= minRarity.ordinal())
+                // Ranura con rareza mínima garantizada
+                List<CardArchetype> filtered = fullPool.stream()
+                    .filter(a -> a.rarity().ordinal() >= minRarity.ordinal())
                     .toList();
-                arch = filtered.get(random.nextInt(filtered.size()));
+                if (!filtered.isEmpty()) {
+                    arch = filtered.get(random.nextInt(filtered.size()));
+                } else {
+                    arch = fullPool.get(random.nextInt(fullPool.size()));
+                }
             } else {
-                arch = POOL.get(random.nextInt(POOL.size()));
+                // Selección balanceada según probabilidades de TCG
+                arch = pickCardWithRarityWeights(fullPool);
             }
 
             PokemonCard card = new PokemonCard();
-            card.setPokedexNumber(arch.num);
-            card.setName(arch.name);
-            card.setType(arch.type);
-            card.setRarity(arch.rarity);
-            card.setHp(arch.hp);
-            card.setAttack(arch.atk);
-            card.setDefense(arch.def);
-            card.setSpeed(arch.spd);
+            card.setPokedexNumber(arch.num());
+            card.setName(arch.name());
+            card.setType(arch.type());
+            card.setRarity(arch.rarity());
+            card.setHp(arch.hp());
+            card.setAttack(arch.atk());
+            card.setDefense(arch.def());
+            card.setSpeed(arch.spd());
             card.setLevel(1);
-            // 25% chance of Holo (50% if Legendary)
-            card.setIsHolo(arch.rarity == CardRarity.LEGENDARY || random.nextInt(100) < 25);
-            card.setImageUrl("https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/" + arch.num + ".png");
-            card.setMove1Name(arch.m1Name);
-            card.setMove1Damage(arch.m1Dmg);
-            card.setMove1Description(arch.m1Desc);
-            card.setMove2Name(arch.m2Name);
-            card.setMove2Damage(arch.m2Dmg);
-            card.setMove2Description(arch.m2Desc);
-            card.setMove2SpecialEffect(arch.m2Effect);
+
+            // Holo: En Eclipse Legendario el slot 0 es 100% Holo.
+            // Las legendarias siempre son Holo (activando el aspecto animado).
+            // El resto de cartas tienen un 25% de probabilidad de ser Holo.
+            boolean isHolo;
+            if (packType.equalsIgnoreCase("LEGENDARY_ECLIPSE") && i == 0) {
+                isHolo = true;
+            } else if (arch.rarity() == CardRarity.LEGENDARY) {
+                isHolo = true;
+            } else {
+                isHolo = random.nextInt(100) < 25;
+            }
+            card.setIsHolo(isHolo);
+
+            card.setImageUrl("https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/" + arch.num() + ".png");
+            card.setMove1Name(arch.m1Name());
+            card.setMove1Damage(arch.m1Dmg());
+            card.setMove1Description(arch.m1Desc());
+            card.setMove2Name(arch.m2Name());
+            card.setMove2Damage(arch.m2Dmg());
+            card.setMove2Description(arch.m2Desc());
+            card.setMove2SpecialEffect(arch.m2Effect());
             card.setIsInDeck(false);
             card.setIsCustom(false);
 
