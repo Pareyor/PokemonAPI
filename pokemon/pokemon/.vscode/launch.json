@@ -1,0 +1,20 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "name": "Spring Boot - PokéPulse Backend",
+      "request": "launch",
+      "mainClass": "com.pokepulse.PokePulseApplication",
+      "projectName": "pokepulse-backend",
+      "cwd": "${workspaceFolder}/backend"
+    },
+    {
+      "type": "chrome",
+      "request": "launch",
+      "name": "Lanzar Frontend Pokémon (Chrome)",
+      "url": "http://localhost:3001",
+      "webRoot": "${workspaceFolder}/frontend/src"
+    }
+  ]
+}

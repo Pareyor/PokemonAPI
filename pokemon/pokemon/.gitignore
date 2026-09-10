@@ -1,0 +1,13 @@
+# Maven
+backend/target/
+backend/*.log
+
+# Node & Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# IDE & OS
+.DS_Store
+Thumbs.db
+*.pid

@@ -1,0 +1,8 @@
+{
+  "editor.tabSize": 2,
+  "editor.formatOnSave": true,
+  "files.trimTrailingWhitespace": true,
+  "typescript.tsdk": "frontend/node_modules/typescript/lib",
+  "java.configuration.updateBuildConfiguration": "automatic",
+  "java.compile.nullAnalysis.mode": "automatic"
+}

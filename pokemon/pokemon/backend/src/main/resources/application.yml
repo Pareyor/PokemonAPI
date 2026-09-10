@@ -1,0 +1,25 @@
+server:
+  port: 8089
+
+spring:
+  application:
+    name: pokepulse-backend
+  datasource:
+    url: jdbc:postgresql://localhost:5434/pokemon_db
+    username: pokemon_user
+    password: pokemon_password
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operationsSorter: method
