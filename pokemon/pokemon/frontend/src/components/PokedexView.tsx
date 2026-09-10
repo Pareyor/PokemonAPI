@@ -2,12 +2,18 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { PokedexItem, PokedexStats, PokemonType } from '../types';
 import { api } from '../services/api';
 import { typeThemes } from './PokemonCardView';
+import { PokedexDetailModal } from './PokedexDetailModal';
 import { Search, CheckCircle2, Lock, Sparkles, Filter, BookOpen } from 'lucide-react';
 
-export const PokedexView: React.FC = () => {
+interface PokedexViewProps {
+  onGoToShop?: () => void;
+}
+
+export const PokedexView: React.FC<PokedexViewProps> = ({ onGoToShop }) => {
   const [entries, setEntries] = useState<PokedexItem[]>([]);
   const [stats, setStats] = useState<PokedexStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedEntry, setSelectedEntry] = useState<PokedexItem | null>(null);
 
   // Filters
   const [search, setSearch] = useState('');
@@ -49,9 +55,9 @@ export const PokedexView: React.FC = () => {
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <h2 className="text-xl font-black text-white tracking-tight">Pokédex Nacional (Kanto)</h2>
+                <h2 className="text-xl font-black text-white tracking-tight">Pokédex PokéPulse TCG</h2>
                 <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-rose-600 text-white">
-                  GEN 1
+                  MULTI-GEN
                 </span>
               </div>
               <p className="text-xs text-slate-300 mt-0.5">
@@ -123,7 +129,7 @@ export const PokedexView: React.FC = () => {
                 statusFilter === 'ALL' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white'
               }`}
             >
-              Todos (151)
+              Todos ({stats?.totalSpecies ?? 0})
             </button>
             <button
               onClick={() => setStatusFilter('OWNED')}
@@ -180,10 +186,11 @@ export const PokedexView: React.FC = () => {
             return (
               <div
                 key={entry.pokedexNumber}
-                className={`relative rounded-2xl border p-3 flex flex-col justify-between transition-all duration-300 ${
+                onClick={() => setSelectedEntry(entry)}
+                className={`relative rounded-2xl border p-3 flex flex-col justify-between transition-all duration-300 cursor-pointer select-none group ${
                   entry.isOwned
-                    ? `bg-gradient-to-b ${theme.bg} ${theme.border} shadow-lg hover:-translate-y-1 hover:shadow-xl`
-                    : 'bg-slate-900/30 border-slate-800/80 opacity-75 hover:opacity-90'
+                    ? `bg-gradient-to-b ${theme.bg} ${theme.border} shadow-lg hover:-translate-y-1.5 hover:shadow-2xl hover:border-amber-400/60`
+                    : 'bg-slate-900/30 border-slate-800/80 opacity-75 hover:opacity-100 hover:border-slate-600 hover:-translate-y-1'
                 }`}
               >
                 {/* Header: Number & Status Badge */}
@@ -203,21 +210,23 @@ export const PokedexView: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Artwork / Silhouette */}
-                  <div className="my-2 relative aspect-square rounded-xl bg-slate-950/60 flex items-center justify-center p-2 overflow-hidden border border-slate-800/60">
+                  {/* Artwork */}
+                  <div className="my-2 relative aspect-square rounded-xl bg-slate-950/60 flex items-center justify-center p-2 overflow-hidden border border-slate-800/60 group-hover:border-slate-600 transition-colors">
                     <img
                       src={entry.imageUrl}
                       alt={entry.name}
                       className={`h-full object-contain transition-all duration-300 ${
                         entry.isOwned
-                          ? 'filter drop-shadow-[0_6px_12px_rgba(0,0,0,0.6)] hover:scale-110'
-                          : 'brightness-0 contrast-200 opacity-30 select-none'
+                          ? 'filter drop-shadow-[0_6px_12px_rgba(0,0,0,0.6)] group-hover:scale-110'
+                          : 'opacity-40 grayscale group-hover:opacity-80 group-hover:grayscale-0 transition-all duration-500'
                       }`}
                       loading="lazy"
                     />
                     {!entry.isOwned && (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-2xl font-black text-slate-600/50">?</span>
+                      <div className="absolute bottom-1 inset-x-0 flex justify-center">
+                        <span className="text-[8px] font-black px-1.5 py-0.5 rounded bg-slate-900/80 text-slate-500 border border-slate-700/60">
+                          No capturado
+                        </span>
                       </div>
                     )}
                   </div>
@@ -228,7 +237,7 @@ export const PokedexView: React.FC = () => {
                       entry.isOwned ? 'text-white' : 'text-slate-400'
                     }`}
                   >
-                    {entry.isOwned ? entry.name : entry.name}
+                    {entry.name}
                   </h4>
                 </div>
 
@@ -254,8 +263,8 @@ export const PokedexView: React.FC = () => {
                       <Sparkles className="w-2.5 h-2.5" /> Nv. Máx: {entry.highestLevel}
                     </span>
                   ) : (
-                    <span className="text-[9px] text-slate-600 font-medium">
-                      No capturado
+                    <span className="text-[9px] text-slate-500 font-medium group-hover:text-blue-300 transition-colors">
+                      Ver aspectos ➔
                     </span>
                   )}
                 </div>
@@ -264,6 +273,14 @@ export const PokedexView: React.FC = () => {
           })}
         </div>
       )}
+
+      {/* Pokedex Detail & Card Aspects Modal */}
+      <PokedexDetailModal
+        entry={selectedEntry}
+        isOpen={!!selectedEntry}
+        onClose={() => setSelectedEntry(null)}
+        onGoToShop={onGoToShop}
+      />
     </div>
   );
 };

@@ -38,11 +38,20 @@ public class DataSeeder implements CommandLineRunner {
             log.info("Perfil de entrenador creado: Ash Ketchum con 500 PokéMonedas.");
         }
 
-        // 2. Seed All 151 Pokédex Entries
+        // 2. Seed All Pokédex Entries (Gen 1 + extra Pokémon from booster pool)
         if (pokedexRepository.count() == 0) {
-            List<PokedexEntry> gen1 = PokedexData.getGen1Entries();
-            pokedexRepository.saveAll(gen1);
-            log.info("Catálogo Pokédex Nacional inicializado con {} especies.", gen1.size());
+            List<PokedexEntry> allEntries = PokedexData.getGen1Entries();
+            pokedexRepository.saveAll(allEntries);
+            log.info("Catálogo Pokédex Nacional inicializado con {} especies.", allEntries.size());
+        } else {
+            // Ensure extra booster-pool Pokémon are present even on existing DBs
+            List<PokedexEntry> allEntries = PokedexData.getGen1Entries();
+            for (PokedexEntry entry : allEntries) {
+                if (!pokedexRepository.existsById(entry.getPokedexNumber())) {
+                    pokedexRepository.save(entry);
+                    log.info("Nueva entrada Pokédex añadida: #{} {}", entry.getPokedexNumber(), entry.getName());
+                }
+            }
         }
 
         // 3. Seed Starter Cards in collection

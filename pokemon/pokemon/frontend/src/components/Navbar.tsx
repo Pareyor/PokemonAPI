@@ -20,38 +20,43 @@ export const Navbar: React.FC<NavbarProps> = ({
   onSelectTab,
 }) => {
   return (
-    <header className="sticky top-0 z-30 border-b border-slate-800/80 bg-slate-900/90 backdrop-blur-md">
+    <header
+      className="sticky top-0 z-30 border-b-2 border-[#CC0000]/60"
+      style={{ background: 'linear-gradient(180deg, #1a0505 0%, #0D1B3E 100%)' }}
+    >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
-          {/* Brand Logo */}
+
+          {/* Brand Logo — Pokéball style */}
           <div className="flex items-center space-x-3 cursor-pointer" onClick={() => onSelectTab('album')}>
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-rose-600 via-red-500 to-amber-500 flex items-center justify-center shadow-lg shadow-rose-600/30">
-              <div className="w-6 h-6 rounded-full border-2 border-white flex flex-col justify-between overflow-hidden relative">
-                <div className="bg-rose-500 h-1/2 w-full" />
-                <div className="bg-white h-1/2 w-full" />
-                <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-0.5 bg-black" />
-                <div className="absolute inset-0 m-auto w-2 h-2 rounded-full bg-white border border-black" />
-              </div>
+            <div className="w-10 h-10 rounded-full border-2 border-white/80 flex flex-col overflow-hidden relative shadow-lg shadow-red-900/50">
+              <div className="bg-[#CC0000] h-1/2 w-full" />
+              <div className="bg-white h-1/2 w-full" />
+              <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[3px] bg-gray-900/80" />
+              <div className="absolute inset-0 m-auto w-3 h-3 rounded-full bg-white border-2 border-gray-900/80 shadow" />
             </div>
             <div>
               <div className="flex items-center space-x-2">
                 <span className="text-lg font-black tracking-tight text-white">PokéPulse</span>
-                <span className="px-2 py-0.5 text-[10px] font-black bg-rose-500/20 text-rose-300 rounded-full border border-rose-500/30">
+                <span className="px-2 py-0.5 text-[10px] font-black bg-[#FFCB05]/20 text-[#FFCB05] rounded-full border border-[#FFCB05]/40">
                   TCG ARENA
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400 hidden sm:block">Cartas Coleccionables & Combates</p>
+              <p className="text-[11px] text-blue-300/70 hidden sm:block">Cartas Coleccionables &amp; Combates</p>
             </div>
           </div>
 
-          {/* Navigation Tabs */}
-          <nav className="hidden md:flex items-center space-x-1 p-1 bg-slate-950/60 rounded-xl border border-slate-800">
+          {/* Navigation Tabs — Pokémon Blue style */}
+          <nav
+            className="hidden md:flex items-center space-x-1 p-1 rounded-xl border border-[#3B4CCA]/40"
+            style={{ background: 'rgba(13,27,62,0.8)' }}
+          >
             <button
               onClick={() => onSelectTab('album')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                 activeTab === 'album'
-                  ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-[#CC0000] text-white shadow-md shadow-red-900/50'
+                  : 'text-blue-200/70 hover:text-white hover:bg-white/5'
               }`}
             >
               Colección ({profile?.totalCards || 0})
@@ -60,8 +65,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               onClick={() => onSelectTab('pokedex')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
                 activeTab === 'pokedex'
-                  ? 'bg-red-600 text-white shadow-md shadow-red-600/30'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-[#CC0000] text-white shadow-md shadow-red-900/50'
+                  : 'text-blue-200/70 hover:text-white hover:bg-white/5'
               }`}
             >
               <BookOpen className="w-3.5 h-3.5" />
@@ -71,8 +76,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               onClick={() => onSelectTab('arena')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
                 activeTab === 'arena'
-                  ? 'bg-amber-600 text-white shadow-md shadow-amber-600/30'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-[#CC0000] text-white shadow-md shadow-red-900/50'
+                  : 'text-blue-200/70 hover:text-white hover:bg-white/5'
               }`}
             >
               <Swords className="w-3.5 h-3.5" />
@@ -82,8 +87,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               onClick={() => onSelectTab('packs')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
                 activeTab === 'packs'
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-[#CC0000] text-white shadow-md shadow-red-900/50'
+                  : 'text-blue-200/70 hover:text-white hover:bg-white/5'
               }`}
             >
               <Sparkles className="w-3.5 h-3.5" />
@@ -93,36 +98,42 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Trainer Stats & CTAs */}
           <div className="flex items-center space-x-2.5">
-            {/* PokéCoins Balance */}
-            <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-black shadow-sm">
-              <Coins className="w-4 h-4 text-amber-400" />
+            {/* PokéCoins — Pikachu yellow */}
+            <div
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border border-[#FFCB05]/40 text-[#FFCB05] text-xs font-black shadow-sm"
+              style={{ background: 'rgba(255,203,5,0.08)' }}
+            >
+              <Coins className="w-4 h-4 text-[#FFCB05]" />
               <span>{profile?.coins ?? 0}</span>
-              <span className="text-[10px] text-amber-500 font-bold hidden sm:inline">PokéMonedas</span>
+              <span className="text-[10px] text-[#FFCB05]/70 font-bold hidden sm:inline">PokéMonedas</span>
             </div>
 
-            {/* Daily Bonus Button */}
+            {/* Daily Bonus */}
             <button
               onClick={onClaimBonus}
               title="Reclamar 150 monedas gratis"
-              className="hidden sm:inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-xl text-xs font-bold text-amber-300 bg-amber-950/60 hover:bg-amber-900/60 border border-amber-500/40 transition-colors"
+              className="hidden sm:inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-xl text-xs font-bold text-[#FFCB05] border border-[#FFCB05]/30 transition-colors hover:bg-[#FFCB05]/10"
+              style={{ background: 'rgba(255,203,5,0.05)' }}
             >
-              <Gift className="w-3.5 h-3.5 text-amber-400" />
+              <Gift className="w-3.5 h-3.5 text-[#FFCB05]" />
               <span>+150</span>
             </button>
 
-            {/* Open Pack CTA */}
+            {/* Open Pack */}
             <button
               onClick={onOpenBoosterShop}
-              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 shadow-md shadow-indigo-600/20 active:scale-95 transition-all"
+              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white shadow-md active:scale-95 transition-all"
+              style={{ background: 'linear-gradient(135deg, #3B4CCA, #6366f1)' }}
             >
               <Sparkles className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Abrir Sobres</span>
             </button>
 
-            {/* Create Custom Card CTA */}
+            {/* Forge Card */}
             <button
               onClick={onOpenCardCreator}
-              className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 shadow-md shadow-rose-600/20 active:scale-95 transition-all"
+              className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-xl text-xs font-bold text-white shadow-md active:scale-95 transition-all"
+              style={{ background: 'linear-gradient(135deg, #CC0000, #E83030)' }}
             >
               <Flame className="w-3.5 h-3.5" />
               <span>Forjar Carta</span>
@@ -134,7 +145,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               target="_blank"
               rel="noreferrer"
               title="Documentación API Swagger"
-              className="hidden lg:inline-flex p-2 rounded-lg text-slate-400 hover:text-white bg-slate-800 border border-slate-700 hover:bg-slate-700 transition-colors"
+              className="hidden lg:inline-flex p-2 rounded-lg text-blue-300/60 hover:text-white border border-[#3B4CCA]/30 hover:bg-[#3B4CCA]/20 transition-colors"
             >
               <ExternalLink className="w-4 h-4" />
             </a>

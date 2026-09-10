@@ -8,9 +8,14 @@ export default {
   theme: {
     extend: {
       colors: {
-        pokeRed: '#ef4444',
-        pokeYellow: '#fbbf24',
-        pokeBlue: '#3b82f6',
+        pokeRed:    '#CC0000',
+        pokeRedLit: '#FF4444',
+        pokeYellow: '#FFCB05',
+        pokeBlue:   '#3B4CCA',
+        pokeNavy:   '#0D1B3E',
+        pokeDark:   '#0A1628',
+        pokeGreen:  '#4CAF50',
+        pokeGold:   '#B8860B',
       },
       keyframes: {
         shimmer: {

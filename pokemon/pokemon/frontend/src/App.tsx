@@ -189,7 +189,7 @@ export const App: React.FC = () => {
   const deckCards = cards.filter((c) => c.isInDeck);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-rose-500 selection:text-white">
+    <div className="min-h-screen text-slate-100 flex flex-col" style={{ background: 'transparent' }}>
       {/* Top Navbar */}
       <Navbar
         profile={profile}
@@ -359,13 +359,14 @@ export const App: React.FC = () => {
 
         {/* TAB 2: POKÉDEX (BASE DE DATOS COMPLETA + TENIDOS/FALTANTES) */}
         {activeTab === 'pokedex' && (
-          <PokedexView />
+          <PokedexView onGoToShop={() => setActiveTab('packs')} />
         )}
 
         {/* TAB 3: ARENA DE COMBATE */}
         {activeTab === 'arena' && (
           <BattleArena
             deckCards={deckCards}
+            allCards={cards}
             opponents={opponents}
             onBattleEnd={handleBattleEnd}
             onSwitchToAlbum={() => setActiveTab('album')}
@@ -395,13 +396,14 @@ export const App: React.FC = () => {
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-slate-900 bg-slate-950/80 py-6 text-center text-xs text-slate-500">
+      <footer className="border-t border-[#CC0000]/20 py-6 text-center text-xs text-blue-300/40"
+        style={{ background: 'linear-gradient(0deg, #0A1628 0%, #0D1B3E 100%)' }}>
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>PokéPulse TCG &copy; {new Date().getFullYear()} — Desarrollado con Spring Boot 3.4, React 18, TypeScript & PostgreSQL</span>
-          <span className="text-slate-400">Localhost: 3001 (Front) | 8089 (Back) | 5434 (Postgres)</span>
+          <span>PokéPulse TCG &copy; {new Date().getFullYear()} — Spring Boot 3.4 · React 18 · TypeScript · PostgreSQL</span>
+          <span className="text-blue-300/30">localhost: 3001 (Front) | 8089 (Back) | 5434 (Postgres)</span>
         </div>
       </footer>
+
 
       {/* Booster Shop Modal (when opened from navbar) */}
       <BoosterPackModal
