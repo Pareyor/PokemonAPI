@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { PokemonCard, PokemonCardFormData, TrainerProfile, BattleOpponent, PokemonType, CardRarity, AuthUser } from './types';
-import { api } from './services/api';
-import { Navbar } from './components/Navbar';
+import { PokemonCard, PokemonCardFormData, TrainerProfile, BattleOpponent, PokemonType, CardRarity, AuthUser, BoosterPackResult } from './types';
+import { api, UNAUTHORIZED_EVENT } from './services/api';
+import { Navbar, AppTab } from './components/Navbar';
 import { PokemonCardView, CardAspect, getCardAspect } from './components/PokemonCardView';
 import { BoosterPackModal } from './components/BoosterPackModal';
 import { BattleArena } from './components/BattleArena';
@@ -10,11 +10,12 @@ import { CardDetailModal } from './components/CardDetailModal';
 import { PokedexView } from './components/PokedexView';
 import { LoginModal } from './components/LoginModal';
 import { AdminUsersView } from './components/AdminUsersView';
+import { WelcomeScreen } from './components/WelcomeScreen';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { Search, Filter, Sparkles, Swords } from 'lucide-react';
 
 export const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'album' | 'pokedex' | 'arena' | 'packs' | 'admin'>('album');
+  const [activeTab, setActiveTab] = useState<AppTab>('album');
 
   // Autenticación de Usuario / Admin
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
@@ -70,6 +71,10 @@ export const App: React.FC = () => {
 
   // Load Data
   const loadData = useCallback(async () => {
+    if (!currentUser) {
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       const [cardsData, profileData, oppsData] = await Promise.all([
@@ -90,11 +95,24 @@ export const App: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [search, typeFilter, rarityFilter, onlyDeckFilter]);
+  }, [currentUser, search, typeFilter, rarityFilter, onlyDeckFilter]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Si el backend responde 401 (sesión caducada, p. ej. tras reiniciarlo), volvemos a pedir login
+  useEffect(() => {
+    const onUnauthorized = () => {
+      setCurrentUser(null);
+      localStorage.removeItem('pokepulse_user');
+      setCards([]);
+      setProfile(null);
+      setIsLoginOpen(true);
+    };
+    window.addEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
+    return () => window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
+  }, []);
 
   // Verificar sesión activa
   useEffect(() => {
@@ -120,16 +138,15 @@ export const App: React.FC = () => {
       `¡Bienvenido, ${user.trainerName || user.username}!`,
       `Sesión iniciada con éxito como ${user.role === 'ADMIN' ? 'Administrador 👑' : 'Entrenador ⚡'}.`
     );
-    loadData();
   };
 
   const handleLogout = async () => {
     await api.logout();
     setCurrentUser(null);
     localStorage.removeItem('pokepulse_user');
-    if (activeTab === 'admin') {
-      setActiveTab('album');
-    }
+    setCards([]);
+    setProfile(null);
+    setActiveTab('album');
     addToast('info', 'Sesión Finalizada', 'Has cerrado tu sesión.');
   };
 
@@ -202,13 +219,14 @@ export const App: React.FC = () => {
     }
   };
 
-  // Handler: Open Booster Pack
-  const handleOpenPack = async (packType: string) => {
-    const result = await api.openPack(packType);
-    setCards((prev) => [...result.cardsObtained, ...prev]);
+  // Handlers: Booster Packs (la mesa de apertura llama a la API; aquí solo sincronizamos estado global)
+  const refreshProfile = () => {
     api.getProfile().then(setProfile).catch(() => {});
-    addToast('success', '¡Sobre Abierto!', `${result.cardsObtained.length} cartas añadidas.`);
-    return result;
+  };
+
+  const handlePackOpened = (result: BoosterPackResult) => {
+    setCards((prev) => [...result.cardsObtained, ...prev]);
+    refreshProfile();
   };
 
   // Handler: Claim Daily Coins Bonus
@@ -222,19 +240,11 @@ export const App: React.FC = () => {
     }
   };
 
-  // Handler: Battle Finish
-  const handleBattleEnd = async (opponentName: string, won: boolean, coins: number, log: string) => {
-    try {
-      await api.recordBattle(opponentName, won, coins, log);
-      api.getProfile().then(setProfile).catch(() => {});
-      if (won) {
-        addToast('success', '¡Victoria!', `Venciste a ${opponentName} y ganaste +${coins} monedas.`);
-      } else {
-        addToast('warning', 'Combate Finalizado', `Has sido derrotado por ${opponentName}.`);
-      }
-    } catch (err: any) {
-      console.error(err);
-    }
+  // Handler: Battle Finish (el servidor ya ha pagado la recompensa; solo refrescamos y avisamos)
+  const handleBattleFinished = (won: boolean, opponentName: string, coins: number) => {
+    refreshProfile();
+    if (won) addToast('success', '¡Victoria!', `Venciste a ${opponentName} y ganaste +${coins} monedas.`);
+    else addToast('warning', 'Combate finalizado', `Has sido derrotado por ${opponentName}.`);
   };
 
   const deckCards = cards.filter((c) => c.isInDeck);
@@ -259,8 +269,10 @@ export const App: React.FC = () => {
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        {!currentUser && <WelcomeScreen onLogin={() => setIsLoginOpen(true)} />}
+
         {/* TAB 1: ÁLBUM / COLECCIÓN DE CARTAS */}
-        {activeTab === 'album' && (
+        {currentUser && activeTab === 'album' && (
           <div className="space-y-6">
             {/* Active Deck Banner */}
             <div className="p-5 rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border border-slate-800 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
@@ -342,6 +354,7 @@ export const App: React.FC = () => {
                   <option value="RARE">Rara ★</option>
                   <option value="EPIC">Épica ★★</option>
                   <option value="LEGENDARY">Legendaria ★★★</option>
+                  <option value="SECRET_RARE">✦ Secreta Dios ★★★★★</option>
                 </select>
 
                 {/* Aspect Selector for Collection */}
@@ -354,10 +367,11 @@ export const App: React.FC = () => {
                     className="bg-transparent text-xs font-black text-amber-300 focus:outline-none cursor-pointer"
                   >
                     <option value="auto" className="bg-slate-900 text-slate-200">✨ Auto (Por rareza)</option>
+                    <option value="secret_rare" className="bg-slate-900 text-fuchsia-300">✦ Secret Rare God-Tier</option>
                     <option value="animated" className="bg-slate-900 text-cyan-300">⚡ Live Animada (GIFs)</option>
                     <option value="holo" className="bg-slate-900 text-amber-300">🔥 Mega EX Full Art</option>
                     <option value="cosmos" className="bg-slate-900 text-white">✦ Ultrabrillante Shiny</option>
-                    <option value="gold" className="bg-slate-900 text-yellow-300">👑 Oro 24K Secret</option>
+                    <option value="gold" className="bg-slate-900 text-yellow-300">👑 Oro 24K</option>
                     <option value="classic" className="bg-slate-900 text-slate-300">🎴 Clásica Mate</option>
                   </select>
                 </div>
@@ -432,23 +446,23 @@ export const App: React.FC = () => {
         )}
 
         {/* TAB 2: POKÉDEX (BASE DE DATOS COMPLETA + TENIDOS/FALTANTES) */}
-        {activeTab === 'pokedex' && (
+        {currentUser && activeTab === 'pokedex' && (
           <PokedexView onGoToShop={() => setActiveTab('packs')} />
         )}
 
         {/* TAB 3: ARENA DE COMBATE */}
-        {activeTab === 'arena' && (
+        {currentUser && activeTab === 'arena' && (
           <BattleArena
             deckCards={deckCards}
             allCards={cards}
             opponents={opponents}
-            onBattleEnd={handleBattleEnd}
+            onBattleFinished={handleBattleFinished}
             onSwitchToAlbum={() => setActiveTab('album')}
           />
         )}
 
         {/* TAB 4: TIENDA DE SOBRES */}
-        {activeTab === 'packs' && (
+        {currentUser && activeTab === 'packs' && (
           <div className="space-y-6">
             <div className="text-center max-w-xl mx-auto space-y-1">
               <h2 className="text-xl font-black text-white flex items-center justify-center gap-2">
@@ -461,10 +475,13 @@ export const App: React.FC = () => {
             </div>
 
             <BoosterPackModal
+              inline
               isOpen={true}
               onClose={() => setActiveTab('album')}
-              onOpenPack={handleOpenPack}
+              onPackOpened={handlePackOpened}
+              onCoinsChanged={refreshProfile}
               trainerCoins={profile?.coins ?? 0}
+              infiniteCoins={!!profile?.infiniteCoins}
             />
           </div>
         )}
@@ -488,8 +505,10 @@ export const App: React.FC = () => {
       <BoosterPackModal
         isOpen={isPackOpen}
         onClose={() => setIsPackOpen(false)}
-        onOpenPack={handleOpenPack}
+        onPackOpened={handlePackOpened}
+        onCoinsChanged={refreshProfile}
         trainerCoins={profile?.coins ?? 0}
+        infiniteCoins={!!profile?.infiniteCoins}
       />
 
       {/* Card Creator / Edit Modal */}

@@ -1,654 +1,564 @@
-import React, { useState } from 'react';
-import { BoosterPackResult, PokemonCard } from '../types';
-import { PokemonCardView, getCardAspect } from './PokemonCardView';
-import { Sparkles, X, Coins, ShieldCheck, Scissors, ChevronRight, Layers, RotateCcw } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { api } from '../services/api';
+import { BoosterPackResult, BoosterPackType, CardRarity, PackCard, PackCatalogItem, PackSlotType, SealedPack } from '../types';
+import { PokemonCardView, getCardAspect, rarityBadges } from './PokemonCardView';
+import { ChevronDown, Coins, Crown, Hand, Layers, Package, RotateCcw, ShieldCheck, Sparkles, X } from 'lucide-react';
 
 interface BoosterPackModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onOpenPack: (packType: string) => Promise<BoosterPackResult>;
+  onPackOpened: (result: BoosterPackResult) => void;
+  onCoinsChanged: () => void;
   trainerCoins: number;
+  /** Modo pruebas del backend: las compras no descuentan monedas. */
+  infiniteCoins?: boolean;
+  /** Integrado en la página (pestaña Sobres) en lugar de como ventana modal a pantalla completa. */
+  inline?: boolean;
 }
 
-const PACKS = [
-  {
-    id: 'BASIC',
-    name: 'Sobre Básico PokéPulse',
-    cost: 100,
-    cardCount: 3,
-    description: 'Contiene 3 cartas Pokémon variadas. Probabilidad de cartas holográficas.',
-    themeColor: '#2563eb',
-    gradient: 'from-blue-600 via-indigo-700 to-sky-500',
-    border: 'border-blue-500/50',
-    glow: 'rgba(37, 99, 235, 0.4)',
-    badge: 'PRINCIPIANTE',
-    mascot: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/25.png', // Pikachu
-    mascotName: 'Pikachu',
-  },
-  {
-    id: 'KANTO_MASTERS',
-    name: 'Sobre Maestros de Kanto',
-    cost: 200,
-    cardCount: 4,
-    description: 'Contiene 4 cartas. ¡Garantiza al menos 1 carta Rara o superior!',
-    themeColor: '#9333ea',
-    gradient: 'from-purple-600 via-pink-600 to-rose-600',
-    border: 'border-purple-500/60',
-    glow: 'rgba(147, 51, 234, 0.4)',
-    badge: 'RARA GARANTIZADA ★',
-    mascot: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/6.png', // Charizard
-    mascotName: 'Charizard',
-  },
-  {
-    id: 'LEGENDARY_ECLIPSE',
-    name: 'Sobre Eclipse Legendario',
-    cost: 350,
-    cardCount: 5,
-    description: 'Contiene 5 cartas. ¡Garantiza al menos 1 carta Épica o Legendaria con efecto Holo!',
-    themeColor: '#d97706',
-    gradient: 'from-amber-500 via-orange-600 to-red-600',
-    border: 'border-amber-500/70',
-    glow: 'rgba(217, 119, 6, 0.5)',
-    badge: 'ÉPICA / LEGENDARIA ★★',
-    mascot: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/150.png', // Mewtwo
-    mascotName: 'Mewtwo',
-  },
-];
+type Stage = 'shop' | 'table' | 'ripping' | 'reveal' | 'summary';
 
-// Web Audio API Synthesizer for pack tear, whoosh, and rare sparkles
-const playSound = (type: 'tear' | 'whoosh' | 'rare' | 'click') => {
-  try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+const ARTWORK = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/';
 
-    if (type === 'tear') {
-      const bufferSize = ctx.sampleRate * 0.4;
-      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-      const output = buffer.getChannelData(0);
-      for (let i = 0; i < bufferSize; i++) {
-        output[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ctx.sampleRate * 0.15));
-      }
-      const whiteNoise = ctx.createBufferSource();
-      whiteNoise.buffer = buffer;
+// Geometría del sobre en la mesa. El corte sigue un borde dentado, como el aluminio real.
+const PACK_W = 260;
+const PACK_H = 400;
+const CUT_Y = 54;
+const CUT_ZONE = 120; // px desde arriba donde se puede empezar a cortar
+const CUT_DONE = 0.9; // fracción del ancho que hay que recorrer
+const ZIGZAG = Array.from({ length: PACK_W / 10 + 1 }, (_, i) => `${i * 10}px ${CUT_Y + (i % 2 ? 3 : -3)}px`);
+const TOP_CLIP = `polygon(0 0, ${PACK_W}px 0, ${[...ZIGZAG].reverse().join(', ')})`;
+const BODY_CLIP = `polygon(${ZIGZAG.join(', ')}, ${PACK_W}px ${PACK_H}px, 0 ${PACK_H}px)`;
 
-      const filter = ctx.createBiquadFilter();
-      filter.type = 'bandpass';
-      filter.frequency.setValueAtTime(1400, ctx.currentTime);
-      filter.frequency.exponentialRampToValueAtTime(300, ctx.currentTime + 0.35);
-
-      const gain = ctx.createGain();
-      gain.gain.setValueAtTime(0.4, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.38);
-
-      whiteNoise.connect(filter);
-      filter.connect(gain);
-      gain.connect(ctx.destination);
-      whiteNoise.start();
-    } else if (type === 'whoosh') {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(450, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(120, ctx.currentTime + 0.2);
-
-      gain.gain.setValueAtTime(0.25, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.2);
-    } else if (type === 'rare') {
-      const notes = [523.25, 659.25, 783.99, 1046.5];
-      notes.forEach((freq, index) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(freq, ctx.currentTime + index * 0.08);
-
-        gain.gain.setValueAtTime(0.15, ctx.currentTime + index * 0.08);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + index * 0.08 + 0.4);
-
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(ctx.currentTime + index * 0.08);
-        osc.stop(ctx.currentTime + index * 0.08 + 0.45);
-      });
-    } else if (type === 'click') {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(600, ctx.currentTime);
-      gain.gain.setValueAtTime(0.1, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.05);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.05);
-    }
-  } catch {
-    // AudioContext fallback
-  }
+const SLOT_LABELS: Record<PackSlotType, string> = {
+  COMMON: 'Común',
+  UNCOMMON: 'Infrecuente',
+  REVERSE_HOLO: 'Reverse Holo',
+  REVERSE_HOLO_HIT: 'Reverse Holo',
+  RARE: 'Slot de rara',
+  GOD_PACK: 'God Pack',
 };
 
-export const BoosterPackModal: React.FC<BoosterPackModalProps> = ({
-  isOpen,
-  onClose,
-  onOpenPack,
-  trainerCoins,
-}) => {
-  const [step, setStep] = useState<'shop' | 'ready_to_tear' | 'tearing' | 'revealing' | 'summary'>('shop');
-  const [selectedPack, setSelectedPack] = useState<(typeof PACKS)[0] | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [packResult, setPackResult] = useState<BoosterPackResult | null>(null);
-  const [currentCardIndex, setCurrentCardIndex] = useState(0);
-  const [isExitingCard, setIsExitingCard] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+const auraFor = (rarity: CardRarity) =>
+  rarity === 'SECRET_RARE' ? 'aura-secret' : rarity === 'LEGENDARY' ? 'aura-legendary' : 'aura-epic';
+
+const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
+// ─── Sonido: un único AudioContext compartido (los navegadores limitan cuántos se pueden crear) ───
+let audioCtx: AudioContext | null = null;
+const ctx = () => {
+  try {
+    audioCtx ??= new (window.AudioContext || (window as any).webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  } catch {
+    return null;
+  }
+};
+const noise = (duration: number, freq: number, volume: number) => {
+  const c = ctx(); if (!c) return;
+  const buffer = c.createBuffer(1, c.sampleRate * duration, c.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (c.sampleRate * duration * 0.4));
+  const src = c.createBufferSource(); const filter = c.createBiquadFilter(); const gain = c.createGain();
+  src.buffer = buffer; filter.type = 'bandpass'; filter.frequency.value = freq; gain.gain.value = volume;
+  src.connect(filter); filter.connect(gain); gain.connect(c.destination); src.start();
+};
+const tone = (freq: number, start: number, duration: number, volume = 0.08, type: OscillatorType = 'sine') => {
+  const c = ctx(); if (!c) return;
+  const t = c.currentTime + start; const osc = c.createOscillator(); const gain = c.createGain();
+  osc.type = type; osc.frequency.setValueAtTime(freq, t);
+  gain.gain.setValueAtTime(volume, t); gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+  osc.connect(gain); gain.connect(c.destination); osc.start(t); osc.stop(t + duration + 0.02);
+};
+const sfx = {
+  tick: () => noise(0.05, 3200 + Math.random() * 1500, 0.12),
+  rip: () => noise(0.45, 2200, 0.35),
+  swish: () => noise(0.18, 900, 0.15),
+  flip: () => tone(520, 0, 0.15, 0.08, 'triangle'),
+  chime: (rarity: CardRarity) => {
+    const notes = rarity === 'SECRET_RARE' ? [523, 659, 784, 1047, 1319] : rarity === 'LEGENDARY' ? [523, 659, 784, 1047] : [587, 740, 880];
+    notes.forEach((n, i) => tone(n, i * 0.09, 0.5, 0.07));
+  },
+};
+
+// ─── Arte del sobre (se usa en miniatura en la tienda y a tamaño real en la mesa) ───
+const PackArt: React.FC<{ item: PackCatalogItem }> = ({ item }) => (
+  <div className="pack-art" style={{ '--pack-color': item.accentColor } as React.CSSProperties}>
+    <i className="pack-crimp" />
+    <div className="pack-face">
+      <span className="pack-brand">POKÉPULSE · TCG</span>
+      <img src={ARTWORK + item.mascotPokedexNumber + '.png'} alt="" draggable={false} />
+      <b>{item.name}</b>
+      <small>{item.cardCount} CARTAS · BOOSTER</small>
+    </div>
+    <i className="pack-sheen" />
+    <i className="pack-crimp" />
+  </div>
+);
+
+const CardBack: React.FC<{ className?: string }> = ({ className = '' }) => (
+  <div className={'tcg-card-back ' + className}>
+    <em>POKÉ</em><b />
+    <em>PULSE</em>
+  </div>
+);
+
+export const BoosterPackModal: React.FC<BoosterPackModalProps> = ({ isOpen, onClose, onPackOpened, onCoinsChanged, trainerCoins, infiniteCoins = false, inline = false }) => {
+  const [stage, setStage] = useState<Stage>('shop');
+  const [catalog, setCatalog] = useState<PackCatalogItem[]>([]);
+  const [sealed, setSealed] = useState<SealedPack[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState('');
+  const [oddsOpen, setOddsOpen] = useState<BoosterPackType | null>(null);
+
+  const [active, setActive] = useState<SealedPack | null>(null);
+  const [result, setResult] = useState<BoosterPackResult | null>(null);
+
+  // Mesa: inclinación del sobre y progreso del corte
+  const packRef = useRef<HTMLDivElement>(null);
+  const [tilt, setTilt] = useState({ x: 0, y: 0 });
+  const [cut, setCut] = useState<{ from: number; to: number; at: number } | null>(null);
+  const cutRef = useRef<{ min: number; max: number; lastTick: number } | null>(null);
+
+  // Revelado: carta superior arrastrable
+  const [index, setIndex] = useState(0);
+  const [flipped, setFlipped] = useState<Set<number>>(new Set());
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState(false);
+  const [leaving, setLeaving] = useState<{ x: number; y: number } | null>(null);
+  const [burst, setBurst] = useState(0);
+  const drag = useRef<{ x: number; y: number; t: number } | null>(null);
+
+  const catalogById = useMemo(() => new Map(catalog.map((c) => [c.id, c])), [catalog]);
+  const activeItem = active ? catalogById.get(active.packType) : undefined;
+  const cards = result?.cards ?? [];
+  const current: PackCard | undefined = cards[index];
+  const needsFlip = !!current && current.hit && !flipped.has(index);
+
+  const loadShop = useCallback(async () => {
+    try {
+      const [cat, inv] = await Promise.all([api.getPackCatalog(), api.getSealedPacks()]);
+      setCatalog(cat);
+      setSealed(inv);
+    } catch (e: any) {
+      setError(e.message || 'No se pudo cargar la tienda.');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) loadShop();
+  }, [isOpen, loadShop]);
+
+  const resetTable = () => {
+    setCut(null); cutRef.current = null; setTilt({ x: 0, y: 0 });
+    setIndex(0); setFlipped(new Set()); setOffset({ x: 0, y: 0 }); setLeaving(null); setDragging(false);
+  };
+
+  const backToShop = () => {
+    resetTable(); setActive(null); setResult(null); setError(''); setStage('shop');
+    loadShop();
+  };
+
+  const placeOnTable = (pack: SealedPack) => {
+    resetTable(); setResult(null); setError(''); setActive(pack); setStage('table');
+  };
+
+  // ─── Tienda ───
+  const buy = async (item: PackCatalogItem, quantity: number, openNow: boolean) => {
+    setBusy(item.id + quantity); setError('');
+    try {
+      const purchase = await api.purchasePacks(item.id, quantity);
+      onCoinsChanged();
+      setSealed((prev) => [...prev, ...purchase.purchased]);
+      if (openNow) placeOnTable(purchase.purchased[0]);
+    } catch (e: any) {
+      setError(e.message || 'No se pudo completar la compra.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // ─── Mesa: cortar el sobre ───
+  const localPoint = (e: React.PointerEvent) => {
+    const rect = packRef.current!.getBoundingClientRect();
+    const scale = rect.width / PACK_W;
+    return { x: (e.clientX - rect.left) / scale, y: (e.clientY - rect.top) / scale };
+  };
+
+  const completeCut = async () => {
+    if (!active) return;
+    cutRef.current = null;
+    setCut({ from: 0, to: PACK_W, at: PACK_W });
+    setStage('ripping');
+    sfx.rip();
+    try {
+      // La animación de rasgado dura lo mismo que tarde la API como mínimo, para que no haya saltos
+      const [opened] = await Promise.all([api.openSealedPack(active.id), wait(1300)]);
+      setResult(opened);
+      setSealed((prev) => prev.filter((p) => p.id !== active.id));
+      onPackOpened(opened);
+      setStage(opened.cards.length ? 'reveal' : 'summary');
+    } catch (e: any) {
+      setError(e.message || 'No se pudo abrir el sobre.');
+      setCut(null);
+      setStage('table');
+    }
+  };
+
+  const onPackPointerDown = (e: React.PointerEvent) => {
+    if (stage !== 'table') return;
+    const p = localPoint(e);
+    if (p.y > CUT_ZONE) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    cutRef.current = { min: p.x, max: p.x, lastTick: 0 };
+    setCut({ from: p.x, to: p.x, at: p.x });
+  };
+
+  const onPackPointerMove = (e: React.PointerEvent) => {
+    if (stage !== 'table') return;
+    const p = localPoint(e);
+    const state = cutRef.current;
+    if (!state) {
+      setTilt({ x: (p.y / PACK_H - 0.5) * -14, y: (p.x / PACK_W - 0.5) * 18 });
+      return;
+    }
+    const x = Math.max(0, Math.min(PACK_W, p.x));
+    state.min = Math.min(state.min, x);
+    state.max = Math.max(state.max, x);
+    const progress = (state.max - state.min) / PACK_W;
+    if (progress - state.lastTick >= 0.08) { state.lastTick = progress; sfx.tick(); }
+    setCut({ from: state.min, to: state.max, at: x });
+    if (progress >= CUT_DONE) completeCut();
+  };
+
+  const onPackPointerUp = () => {
+    if (cutRef.current) { cutRef.current = null; setCut(null); }
+  };
+
+  const autoCut = async () => {
+    if (stage !== 'table') return;
+    for (let x = 0; x <= PACK_W; x += 26) {
+      setCut({ from: 0, to: x, at: x }); sfx.tick();
+      await wait(45);
+    }
+    completeCut();
+  };
+
+  // ─── Revelado: deslizar cartas ───
+  const advance = useCallback(() => {
+    if (index + 1 >= cards.length) setStage('summary');
+    else { setIndex(index + 1); setOffset({ x: 0, y: 0 }); setLeaving(null); }
+  }, [index, cards.length]);
+
+  const flip = useCallback(() => {
+    if (!current) return;
+    setFlipped((prev) => new Set(prev).add(index));
+    sfx.flip();
+    window.setTimeout(() => { sfx.chime(current.card.rarity); setBurst((b) => b + 1); }, 320);
+  }, [current, index]);
+
+  const throwCard = useCallback((dx: number, dy: number) => {
+    if (leaving) return;
+    const len = Math.hypot(dx, dy) || 1;
+    setLeaving({ x: (dx / len) * 900, y: (dy / len) * 900 });
+    sfx.swish();
+    window.setTimeout(advance, 280);
+  }, [leaving, advance]);
+
+  const onCardPointerDown = (e: React.PointerEvent) => {
+    if (leaving) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    drag.current = { x: e.clientX, y: e.clientY, t: performance.now() };
+    setDragging(true);
+  };
+
+  const onCardPointerMove = (e: React.PointerEvent) => {
+    if (!drag.current || needsFlip) return;
+    setOffset({ x: e.clientX - drag.current.x, y: e.clientY - drag.current.y });
+  };
+
+  const onCardPointerUp = (e: React.PointerEvent) => {
+    const start = drag.current;
+    drag.current = null;
+    setDragging(false);
+    if (!start) return;
+    const dx = e.clientX - start.x; const dy = e.clientY - start.y;
+    const dist = Math.hypot(dx, dy);
+    const speed = dist / Math.max(1, performance.now() - start.t);
+    if (dist < 8) { needsFlip ? flip() : throwCard(-1, -0.25); return; }
+    if (needsFlip) return;
+    if (dist > 110 || (dist > 35 && speed > 0.6)) throwCard(dx, dy);
+    else setOffset({ x: 0, y: 0 });
+  };
+
+  useEffect(() => {
+    if (stage !== 'reveal') return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!['ArrowRight', 'ArrowLeft', ' ', 'Enter'].includes(e.key)) return;
+      e.preventDefault();
+      if (needsFlip) flip();
+      else throwCard(e.key === 'ArrowRight' ? 1 : -1, -0.2);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [stage, needsFlip, flip, throwCard]);
 
   if (!isOpen) return null;
 
-  // 1. User picks pack to buy
-  const handleSelectAndBuyPack = async (pack: (typeof PACKS)[0]) => {
-    setErrorMsg(null);
-    setLoading(true);
-    setSelectedPack(pack);
-    try {
-      playSound('click');
-      const result = await onOpenPack(pack.id);
-      setPackResult(result);
-      setStep('ready_to_tear');
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Error al comprar el sobre');
-      setSelectedPack(null);
-    } finally {
-      setLoading(false);
-    }
+  const canAfford = (cost: number) => infiniteCoins || trainerCoins >= cost;
+
+  const sealedByType = catalog
+    .map((item) => ({ item, packs: sealed.filter((p) => p.packType === item.id) }))
+    .filter((g) => g.packs.length > 0);
+  const nextSealed = sealed.find((p) => p.id !== active?.id);
+  const cutProgress = cut ? (cut.to - cut.from) / PACK_W : 0;
+
+  const subtitle: Record<Stage, string> = {
+    shop: 'Compra sobres sellados y ábrelos cuando quieras.',
+    table: 'Desliza el dedo por la parte superior para cortar el sobre.',
+    ripping: '¡El aluminio cede!',
+    reveal: needsFlip ? 'Algo brilla… toca la carta para darle la vuelta.' : 'Desliza la carta hacia cualquier lado para ver la siguiente.',
+    summary: 'Todas las cartas ya están en tu colección.',
   };
 
-  // 2. Tear the foil pack
-  const handleTearPack = () => {
-    if (step !== 'ready_to_tear') return;
-    playSound('tear');
-    setStep('tearing');
-
-    setTimeout(() => {
-      setStep('revealing');
-      setCurrentCardIndex(0);
-      playSound('whoosh');
-
-      if (packResult?.cardsObtained[0]?.isHolo || packResult?.cardsObtained[0]?.rarity !== 'COMMON') {
-        setTimeout(() => playSound('rare'), 300);
-      }
-    }, 950);
-  };
-
-  // 3. User clicks on current card to pass to next card
-  const handleNextCard = () => {
-    if (isExitingCard || !packResult) return;
-
-    setIsExitingCard(true);
-    playSound('whoosh');
-
-    setTimeout(() => {
-      if (currentCardIndex + 1 < packResult.cardsObtained.length) {
-        const nextIdx = currentCardIndex + 1;
-        setCurrentCardIndex(nextIdx);
-        setIsExitingCard(false);
-
-        const nextCard = packResult.cardsObtained[nextIdx];
-        if (nextCard.isHolo || nextCard.rarity === 'EPIC' || nextCard.rarity === 'LEGENDARY') {
-          setTimeout(() => playSound('rare'), 200);
-        }
-      } else {
-        setIsExitingCard(false);
-        setStep('summary');
-        playSound('rare');
-      }
-    }, 300);
-  };
-
-  const handleReset = () => {
-    setStep('shop');
-    setSelectedPack(null);
-    setPackResult(null);
-    setCurrentCardIndex(0);
-    setIsExitingCard(false);
-    setErrorMsg(null);
-  };
+  const cardTransform = leaving
+    ? `translate(${leaving.x}px, ${leaving.y}px) rotate(${leaving.x * 0.04}deg)`
+    : `translate(${offset.x}px, ${offset.y}px) rotate(${offset.x * 0.05}deg)`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/90 backdrop-blur-md overflow-y-auto">
-      <div className="relative w-full max-w-4xl bg-slate-900/95 border border-[#3B4CCA]/40 rounded-3xl shadow-2xl overflow-hidden my-4 sm:my-6 flex flex-col min-h-[600px]">
-        {/* Header Bar */}
-        <div className="px-6 py-4 border-b border-slate-800 bg-slate-950/80 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="p-2.5 rounded-xl bg-[#CC0000]/20 border border-[#CC0000]/40 text-[#FFCB05]">
-              <Sparkles className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-base font-black text-white flex items-center gap-2">
-                Tienda Oficial de Sobres Booster
-              </h3>
-              <p className="text-xs text-blue-200/70">
-                {step === 'shop' && 'Selecciona un sobre para abrir'}
-                {step === 'ready_to_tear' && '¡Sobre listo! Rompe el envoltorio para abrirlo'}
-                {step === 'tearing' && '¡Abriendo sobre...!'}
-                {step === 'revealing' && `Carta ${currentCardIndex + 1} de ${packResult?.cardsObtained.length} (Toca la carta para continuar)`}
-                {step === 'summary' && '¡Cartas desbloqueadas y guardadas!'}
-              </p>
+    <div className={inline ? '' : 'fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[#030712]/95 p-3 backdrop-blur-md'}>
+      <div className={'w-full overflow-hidden rounded-[28px] border border-white/10 bg-[#0b1020] shadow-2xl ' + (inline ? '' : 'my-3 max-w-5xl')}>
+        <header className="flex items-center justify-between gap-3 border-b border-white/10 bg-black/25 px-5 py-4 sm:px-7">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="rounded-xl border border-amber-300/20 bg-amber-300/10 p-2 text-amber-300"><Sparkles className="h-5 w-5" /></span>
+            <div className="min-w-0">
+              <h2 className="font-black text-white">Mesa de apertura</h2>
+              <p className="truncate text-xs text-slate-400">{subtitle[stage]}</p>
             </div>
           </div>
-
-          <div className="flex items-center space-x-3">
-            <div
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#FFCB05]/40 text-[#FFCB05] text-xs font-black shadow-sm"
-              style={{ background: 'rgba(255, 203, 5, 0.08)' }}
-            >
-              <Coins className="w-4 h-4 text-[#FFCB05]" />
-              <span>{trainerCoins}</span>
-            </div>
-            <button
-              onClick={() => {
-                handleReset();
-                onClose();
-              }}
-              className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
+          <div className="flex items-center gap-2">
+            <span className="flex items-center gap-1 rounded-lg border border-amber-300/25 bg-amber-300/10 px-3 py-1.5 text-xs font-black text-amber-300"><Coins className="h-4 w-4" />{infiniteCoins ? '∞' : trainerCoins}</span>
+            {(stage === 'table' || stage === 'summary') && (
+              <button onClick={backToShop} className="hidden rounded-lg px-3 py-2 text-xs font-bold text-slate-300 hover:bg-white/10 sm:block">Tienda</button>
+            )}
+            {!inline && <button aria-label="Cerrar" onClick={() => { backToShop(); onClose(); }} className="rounded-lg p-2 text-slate-400 hover:bg-white/10 hover:text-white"><X className="h-5 w-5" /></button>}
           </div>
-        </div>
+        </header>
 
-        {/* Error message */}
-        {errorMsg && (
-          <div className="mx-6 mt-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300">
-            {errorMsg}
-          </div>
-        )}
+        {error && <p role="alert" className="mx-5 mt-4 rounded-xl border border-rose-400/30 bg-rose-400/10 p-3 text-sm text-rose-200 sm:mx-7">{error}</p>}
 
-        {/* Body Content */}
-        <div className="p-6 flex-1 flex flex-col items-center justify-center">
-
-          {/* ======================================================== */}
-          {/* STEP 1: SHOP CATALOG */}
-          {/* ======================================================== */}
-          {step === 'shop' && (
-            <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-5">
-              {PACKS.map((pack) => {
-                const canAfford = trainerCoins >= pack.cost;
-
-                return (
-                  <div
-                    key={pack.id}
-                    className={`rounded-2xl bg-gradient-to-b from-slate-900 to-slate-950 border-2 ${pack.border} p-5 flex flex-col justify-between shadow-xl hover:scale-[1.02] transition-transform relative overflow-hidden group`}
-                  >
-                    <div>
-                      {/* Badge */}
-                      <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wider bg-white/10 text-white border border-white/20 mb-3">
-                        {pack.badge}
-                      </span>
-
-                      {/* Foil Pack Preview Visual */}
-                      <div
-                        className={`w-full h-44 rounded-2xl bg-gradient-to-tr ${pack.gradient} flex flex-col items-center justify-between p-3 text-center shadow-2xl relative overflow-hidden mb-4 border border-white/20`}
-                        style={{
-                          boxShadow: `0 10px 25px -5px ${pack.glow}`,
-                        }}
-                      >
-                        {/* Crimped top seal */}
-                        <div className="w-full h-2.5 bg-black/30 border-b border-white/20 flex items-center justify-around opacity-60">
-                          {Array.from({ length: 20 }).map((_, i) => (
-                            <div key={i} className="w-0.5 h-full bg-white/40" />
-                          ))}
-                        </div>
-
-                        {/* Mascot artwork */}
-                        <div className="relative flex-1 flex items-center justify-center">
-                          <img
-                            src={pack.mascot}
-                            alt={pack.name}
-                            className="w-24 h-24 object-contain filter drop-shadow-[0_8px_12px_rgba(0,0,0,0.5)] group-hover:scale-110 transition-transform duration-300"
-                          />
-                        </div>
-
-                        {/* Pack Name on Foil */}
-                        <div className="z-10 bg-black/40 backdrop-blur-xs px-3 py-1 rounded-lg border border-white/10 w-full">
-                          <span className="font-black text-xs text-white tracking-wide block truncate drop-shadow">
-                            {pack.name}
-                          </span>
-                          <span className="text-[10px] font-bold text-[#FFCB05]">
-                            {pack.cardCount} CARTAS
-                          </span>
-                        </div>
-
-                        {/* Crimped bottom seal */}
-                        <div className="w-full h-2.5 bg-black/30 border-t border-white/20 flex items-center justify-around opacity-60">
-                          {Array.from({ length: 20 }).map((_, i) => (
-                            <div key={i} className="w-0.5 h-full bg-white/40" />
-                          ))}
-                        </div>
-                      </div>
-
-                      <p className="text-xs text-blue-100/70 leading-relaxed min-h-[36px]">
-                        {pack.description}
-                      </p>
-                    </div>
-
-                    <div className="mt-5 pt-3 border-t border-slate-800 flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 text-sm font-black text-[#FFCB05]">
-                        <Coins className="w-4 h-4" />
-                        <span>{pack.cost}</span>
-                      </div>
-
-                      <button
-                        onClick={() => handleSelectAndBuyPack(pack)}
-                        disabled={loading || !canAfford}
-                        className={`px-4 py-2 rounded-xl text-xs font-black transition-all shadow-md ${
-                          canAfford
-                            ? 'bg-[#CC0000] hover:bg-[#E83030] text-white shadow-red-900/30 active:scale-95'
-                            : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
-                        }`}
-                      >
-                        {loading && selectedPack?.id === pack.id
-                          ? 'Comprando...'
-                          : canAfford
-                          ? 'Comprar y Abrir'
-                          : 'Monedas insuficientes'}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* ======================================================== */}
-          {/* STEP 2 & 3: REALISTIC BOOSTER PACK WITH TEAR ANIMATION */}
-          {/* ======================================================== */}
-          {(step === 'ready_to_tear' || step === 'tearing') && selectedPack && (
-            <div className="flex flex-col items-center justify-center text-center space-y-6 max-w-md w-full py-4">
-              <div className="space-y-1">
-                <span className="text-xs font-black uppercase tracking-widest text-[#FFCB05]">
-                  {selectedPack.badge}
-                </span>
-                <h3 className="text-xl font-black text-white">
-                  ¡Tienes en tus manos el sobre!
-                </h3>
-                <p className="text-xs text-blue-200/70">
-                  Haz clic en la parte superior o pulsa el botón para rasgar el envoltorio.
-                </p>
-              </div>
-
-              {/* Realistic 3D Foil Booster Pack */}
-              <div className="relative w-64 h-[380px] select-none">
-                {/* Back glow */}
-                <div
-                  className="absolute inset-0 rounded-3xl blur-2xl opacity-60 -z-10"
-                  style={{ background: selectedPack.glow }}
-                />
-
-                {/* The Full Foil Pack Container */}
-                <div
-                  onClick={handleTearPack}
-                  className={`w-full h-full rounded-2xl flex flex-col justify-between overflow-hidden cursor-pointer shadow-2xl relative border-2 border-white/30 transition-transform duration-300 ${
-                    step === 'ready_to_tear' ? 'hover:scale-105 active:scale-95' : ''
-                  }`}
-                  style={{
-                    background: `linear-gradient(135deg, ${selectedPack.themeColor}, #0D1B3E 60%, ${selectedPack.themeColor})`,
-                    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7), inset 0 0 25px rgba(255, 255, 255, 0.2)',
-                  }}
-                >
-                  {/* Metallic Light Sheen */}
-                  <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/20 to-transparent pointer-events-none" />
-
-                  {/* TOP TEAR STRIP (Animates ripping off when torn) */}
-                  <div
-                    className={`relative z-20 w-full h-16 bg-black/40 border-b-2 border-dashed border-yellow-300/80 flex flex-col justify-between p-1.5 transition-all duration-700 origin-top-right ${
-                      step === 'tearing'
-                        ? 'translate-x-32 -translate-y-16 rotate-45 opacity-0'
-                        : ''
-                    }`}
-                    style={{
-                      background: `linear-gradient(180deg, rgba(0,0,0,0.6) 0%, ${selectedPack.themeColor} 100%)`,
-                    }}
-                  >
-                    {/* Top crimped seal */}
-                    <div className="w-full h-3 bg-black/60 flex items-center justify-around">
-                      {Array.from({ length: 28 }).map((_, i) => (
-                        <div key={i} className="w-0.5 h-full bg-white/30" />
-                      ))}
-                    </div>
-
-                    {/* Tear strip guidance */}
-                    <div className="flex items-center justify-center gap-1.5 text-[10px] font-black text-yellow-300 animate-pulse">
-                      <Scissors className="w-3.5 h-3.5" />
-                      <span>¡TOCA AQUÍ PARA RASGAR!</span>
-                    </div>
-
-                    {/* Perforated dotted line */}
-                    <div className="w-full border-b border-dashed border-white/60" />
-                  </div>
-
-                  {/* CARDS PEEKING OUT when tearing */}
-                  {step === 'tearing' && (
-                    <div className="absolute inset-x-6 top-6 h-40 bg-gradient-to-b from-blue-900 to-indigo-950 rounded-xl border-2 border-amber-400 z-10 shadow-2xl flex items-center justify-center animate-bounce">
-                      <Sparkles className="w-10 h-10 text-yellow-300 animate-spin" />
-                    </div>
-                  )}
-
-                  {/* PACK CENTER ARTWORK */}
-                  <div className="flex-1 flex flex-col items-center justify-center p-3 relative">
-                    <img
-                      src={selectedPack.mascot}
-                      alt={selectedPack.mascotName}
-                      className="w-36 h-36 object-contain filter drop-shadow-[0_12px_16px_rgba(0,0,0,0.7)]"
-                    />
-
-                    <div className="mt-2 text-center bg-black/50 px-3 py-1.5 rounded-xl border border-white/20 w-full">
-                      <span className="font-pixel text-[9px] text-[#FFCB05] block tracking-wider">
-                        POKÉPULSE TCG
-                      </span>
-                      <span className="font-black text-sm text-white tracking-wide drop-shadow">
-                        {selectedPack.name}
-                      </span>
-                      <span className="text-[10px] font-bold text-blue-200">
-                        {selectedPack.cardCount} CARTAS
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* BOTTOM CRIMPED SEAL */}
-                  <div className="w-full h-5 bg-black/60 border-t border-white/20 flex items-center justify-around">
-                    {Array.from({ length: 28 }).map((_, i) => (
-                      <div key={i} className="w-0.5 h-full bg-white/30" />
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Action button */}
-              <button
-                onClick={handleTearPack}
-                disabled={step === 'tearing'}
-                className="w-full max-w-xs py-3 rounded-2xl font-black text-sm text-white bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 hover:from-red-500 hover:to-amber-500 shadow-xl shadow-red-900/40 flex items-center justify-center gap-2 active:scale-95 transition-all"
-              >
-                <Scissors className="w-4 h-4" />
-                <span>{step === 'tearing' ? '¡Rasgando envoltorio...!' : 'Rasgar y Abrir Sobre'}</span>
-              </button>
-            </div>
-          )}
-
-          {/* ======================================================== */}
-          {/* STEP 4: CARD BY CARD INSPECTION (CLICK TO ADVANCE) */}
-          {/* ======================================================== */}
-          {step === 'revealing' && packResult && (
-            <div className="flex flex-col items-center justify-center text-center space-y-4 max-w-md w-full py-2">
-              {/* Progress & Card Counter Indicator */}
-              <div className="flex items-center justify-between w-full px-2">
-                <span className="text-xs font-black text-[#FFCB05] flex items-center gap-1.5">
-                  <Layers className="w-4 h-4 text-[#FFCB05]" />
-                  Carta {currentCardIndex + 1} de {packResult.cardsObtained.length}
-                </span>
-
-                {/* Dot trackers */}
-                <div className="flex items-center gap-1.5">
-                  {packResult.cardsObtained.map((_, i) => (
-                    <div
-                      key={i}
-                      className={`h-2 rounded-full transition-all duration-300 ${
-                        i === currentCardIndex
-                          ? 'w-6 bg-[#FFCB05]'
-                          : i < currentCardIndex
-                          ? 'w-2 bg-emerald-500'
-                          : 'w-2 bg-slate-700'
-                      }`}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              {/* Hint badge */}
-              {(() => {
-                const currentCard = packResult.cardsObtained[currentCardIndex];
-                const aspect = getCardAspect(currentCard);
-                return (
-                  <div className={`inline-flex items-center gap-1.5 text-xs font-bold border px-3.5 py-1 rounded-full animate-pulse ${
-                    aspect === 'animated'
-                      ? 'text-cyan-300 bg-cyan-950/60 border-cyan-500/30'
-                      : 'text-blue-200 bg-blue-950/60 border-blue-500/30'
-                  }`}>
-                    <span>
-                      {aspect === 'animated'
-                        ? '⚡ Toca el sprite del Pokémon · Usa "Siguiente" para avanzar'
-                        : '👇 Toca sobre la carta para pasar a la siguiente'}
-                    </span>
-                  </div>
-                );
-              })()}
-
-              {/* Stacked Cards Area */}
-              {(() => {
-                const currentCard = packResult.cardsObtained[currentCardIndex];
-                const aspect = getCardAspect(currentCard);
-                const isAnimated = aspect === 'animated';
-                return (
-                  <div
-                    onClick={isAnimated ? undefined : handleNextCard}
-                    className={`relative w-72 sm:w-80 select-none group ${isAnimated ? 'cursor-default' : 'cursor-pointer'}`}
-                  >
-                    {/* Back card shadows representing remaining cards in stack */}
-                    {currentCardIndex + 2 < packResult.cardsObtained.length && (
-                      <div className="absolute inset-x-4 -top-3 h-full rounded-2xl bg-slate-800/60 border border-slate-700/60 -z-20 transform scale-95" />
+        <main className="booster-table flex min-h-[600px] items-center justify-center overflow-hidden p-4 sm:p-8">
+          {/* ─── TIENDA ─── */}
+          {stage === 'shop' && (
+            <div className="w-full space-y-8">
+              <div className="grid w-full grid-cols-1 gap-5 md:grid-cols-3">
+                {catalog.map((item) => (
+                  <article key={item.id} className="flex flex-col rounded-2xl border border-white/10 bg-slate-950/70 p-4 shadow-xl">
+                    <div className="pack-mini mx-auto"><PackArt item={item} /></div>
+                    <h3 className="mt-4 font-black text-white">{item.name}</h3>
+                    <p className="mt-1 min-h-10 text-xs leading-relaxed text-slate-400">{item.description}</p>
+                    <p className="mt-2 text-[11px] font-bold text-amber-200/80">
+                      <Crown className="mr-1 inline h-3.5 w-3.5" />
+                      Legendaria garantizada en {item.packsUntilPity} {item.packsUntilPity === 1 ? 'sobre' : 'sobres'} como máximo
+                    </p>
+                    <button onClick={() => setOddsOpen(oddsOpen === item.id ? null : item.id)} className="mt-2 flex items-center gap-1 self-start text-[11px] font-bold text-sky-300 hover:text-sky-200" aria-expanded={oddsOpen === item.id}>
+                      Probabilidades <ChevronDown className={'h-3.5 w-3.5 transition-transform ' + (oddsOpen === item.id ? 'rotate-180' : '')} />
+                    </button>
+                    {oddsOpen === item.id && (
+                      <dl className="mt-2 space-y-1.5 rounded-xl border border-white/10 bg-black/30 p-3 text-[11px]">
+                        {item.slots.map((slot) => (
+                          <div key={slot.slotType}>
+                            <dt className="font-bold text-slate-300">{slot.count}× {SLOT_LABELS[slot.slotType]}{slot.slotType === 'REVERSE_HOLO_HIT' ? ' (alta)' : ''}</dt>
+                            <dd className="text-slate-400">
+                              {Object.entries(slot.odds).map(([rarity, pct]) => `${rarityBadges[rarity as CardRarity].label} ${pct}%`).join(' · ')}
+                            </dd>
+                          </div>
+                        ))}
+                        <div className="border-t border-white/10 pt-1.5 text-amber-200">God Pack (10 cartas Épica+): {item.godPackChance}%</div>
+                      </dl>
                     )}
-                    {currentCardIndex + 1 < packResult.cardsObtained.length && (
-                      <div className="absolute inset-x-2 -top-1.5 h-full rounded-2xl bg-slate-800/80 border border-slate-700/80 -z-10 transform scale-98" />
-                    )}
-
-                    {/* Special card reveal banner */}
-                    {(aspect === 'animated' || aspect === 'cosmos') && (
-                      <div className={`mb-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black border shadow-lg animate-pulse ${
-                        aspect === 'animated'
-                          ? 'bg-cyan-950/80 border-cyan-400/60 text-cyan-300'
-                          : 'bg-purple-950/80 border-purple-400/50 text-purple-200'
-                      }`}>
-                        <Sparkles className="w-3 h-3" />
-                        {aspect === 'animated' ? '⚡ ¡LEGENDARIA! Toca la imagen del Pokémon para ver el ataque' : '⭐ ¡CARTA ESPECIAL ENCONTRADA!'}
+                    <div className="mt-auto flex items-center justify-between gap-2 border-t border-white/10 pt-3">
+                      <span className="flex items-center gap-1 text-sm font-black text-amber-300"><Coins className="h-4 w-4" />{item.cost}</span>
+                      <div className="flex gap-2">
+                        <button disabled={!!busy || !canAfford(item.cost * 5)} onClick={() => buy(item, 5, false)} className="rounded-xl border border-white/15 px-3 py-2 text-xs font-black text-white hover:bg-white/10 disabled:opacity-40">{busy === item.id + 5 ? '…' : '×5'}</button>
+                        <button disabled={!!busy || !canAfford(item.cost)} onClick={() => buy(item, 1, true)} className="rounded-xl bg-red-600 px-4 py-2 text-xs font-black text-white hover:bg-red-500 disabled:bg-slate-700">{busy === item.id + 1 ? 'Comprando…' : 'Comprar y abrir'}</button>
                       </div>
-                    )}
-
-                    {/* The Active Card */}
-                    <div
-                      className={`transition-all duration-300 transform ${
-                        isExitingCard
-                          ? 'translate-x-48 -rotate-12 opacity-0 scale-90'
-                          : isAnimated ? '' : 'group-hover:scale-105 group-active:scale-95'
-                      }`}
-                    >
-                      <PokemonCardView
-                        card={currentCard}
-                        aspect={aspect}
-                      />
                     </div>
-                  </div>
-                );
-              })()}
-
-              {/* Navigation buttons */}
-              <div className="flex items-center gap-3 w-full justify-center pt-2">
-                <button
-                  onClick={handleNextCard}
-                  className="px-6 py-2.5 rounded-xl font-black text-xs text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 shadow-lg shadow-blue-900/40 flex items-center gap-2 active:scale-95 transition-all"
-                >
-                  <span>
-                    {currentCardIndex + 1 < packResult.cardsObtained.length
-                      ? 'Siguiente Carta'
-                      : 'Ver Resumen Completo'}
-                  </span>
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-
-                <button
-                  onClick={() => setStep('summary')}
-                  className="px-3 py-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white bg-slate-800/60 hover:bg-slate-800 transition-colors"
-                >
-                  Saltar
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* ======================================================== */}
-          {/* STEP 5: RECAP / SUMMARY OF ALL CARDS OBTAINED */}
-          {/* ======================================================== */}
-          {step === 'summary' && packResult && (
-            <div className="w-full space-y-6">
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-2xl bg-indigo-950/40 border border-indigo-500/30">
-                <div>
-                  <h4 className="text-base font-black text-white flex items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-[#FFCB05]" />
-                    ¡Sobre {packResult.packName} abierto!
-                  </h4>
-                  <p className="text-xs text-blue-200/70">
-                    Se han añadido {packResult.cardsObtained.length} cartas directamente a tu álbum.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleReset}
-                    className="px-4 py-2 bg-[#CC0000] hover:bg-[#E83030] text-white rounded-xl text-xs font-black shadow-md shadow-red-900/30 flex items-center gap-1.5 transition-colors"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    <span>Abrir Otro Sobre</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      handleReset();
-                      onClose();
-                    }}
-                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-bold transition-colors"
-                  >
-                    Ver en Colección
-                  </button>
-                </div>
-              </div>
-
-              {/* Cards Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {packResult.cardsObtained.map((card: PokemonCard, idx: number) => (
-                  <div key={card.id || idx} className="animate-float">
-                    <PokemonCardView card={card} compact aspect={getCardAspect(card)} />
-                  </div>
+                  </article>
                 ))}
               </div>
 
-              <div className="text-center pt-2">
-                <span className="inline-flex items-center gap-1.5 text-xs text-emerald-400 font-bold bg-emerald-950/60 px-4 py-2 rounded-full border border-emerald-500/30 shadow-sm">
-                  <ShieldCheck className="w-4 h-4" /> Todas las cartas han sido guardadas en tu colección de PostgreSQL
-                </span>
-              </div>
+              <section aria-label="Sobres sellados">
+                <h3 className="flex items-center gap-2 text-sm font-black text-white"><Package className="h-4 w-4 text-amber-300" />Tus sobres sellados ({sealed.length})</h3>
+                {sealedByType.length === 0 ? (
+                  <p className="mt-2 text-xs text-slate-500">No tienes sobres sin abrir. Compra unos cuantos con ×5 y ábrelos con calma.</p>
+                ) : (
+                  <div className="mt-3 flex flex-wrap gap-3">
+                    {sealedByType.map(({ item, packs }) => (
+                      <button key={item.id} onClick={() => placeOnTable(packs[0])} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/70 p-2 pr-4 text-left hover:border-amber-300/40">
+                        <div className="pack-thumb"><PackArt item={item} /></div>
+                        <div>
+                          <p className="text-xs font-black text-white">{item.name}</p>
+                          <p className="text-[11px] text-slate-400">×{packs.length} · Toca para abrir</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </section>
             </div>
           )}
 
-        </div>
+          {/* ─── MESA: CORTAR EL SOBRE ─── */}
+          {(stage === 'table' || stage === 'ripping') && activeItem && (
+            <section className="flex flex-col items-center text-center">
+              <div className="pack-stage" style={{ perspective: '1100px' }}>
+                {stage === 'ripping' && (
+                  <div className="emerging-cards" aria-hidden>
+                    <CardBack className="stack-depth-2" /><CardBack className="stack-depth-1" /><CardBack />
+                  </div>
+                )}
+                <div
+                  ref={packRef}
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Sobre sellado. Pulsa Enter para abrirlo."
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); autoCut(); } }}
+                  onPointerDown={onPackPointerDown}
+                  onPointerMove={onPackPointerMove}
+                  onPointerUp={onPackPointerUp}
+                  onPointerCancel={onPackPointerUp}
+                  onPointerLeave={() => !cutRef.current && setTilt({ x: 0, y: 0 })}
+                  className={'table-pack ' + (stage === 'ripping' ? 'is-ripping' : '') + (cut ? ' is-cutting' : '')}
+                  style={{
+                    width: PACK_W, height: PACK_H,
+                    transform: `rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)`,
+                    '--mx': `${50 + tilt.y * 2.5}%`, '--my': `${50 - tilt.x * 3}%`,
+                  } as React.CSSProperties}
+                >
+                  <div className="pack-piece pack-top" style={{ clipPath: TOP_CLIP }}><PackArt item={activeItem} /></div>
+                  <div className="pack-piece pack-body" style={{ clipPath: BODY_CLIP }}><PackArt item={activeItem} /></div>
+                  {stage === 'table' && (
+                    <>
+                      <i className="cut-guide" style={{ top: CUT_Y }} />
+                      {cut ? (
+                        <>
+                          <i className="cut-line" style={{ top: CUT_Y - 1, left: cut.from, width: cut.to - cut.from }} />
+                          <i className="cut-spark" style={{ top: CUT_Y, left: cut.at }} />
+                        </>
+                      ) : (
+                        <span className="cut-hint" style={{ top: CUT_Y - 14 }}><Hand className="h-5 w-5" /></span>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+              {stage === 'table' && (
+                <>
+                  <div className="mt-6 h-1.5 w-52 overflow-hidden rounded-full bg-white/10" aria-hidden>
+                    <div className="h-full bg-amber-300 transition-[width] duration-75" style={{ width: Math.min(100, (cutProgress / CUT_DONE) * 100) + '%' }} />
+                  </div>
+                  <p className="mt-3 text-xs font-bold text-slate-400">
+                    {cut ? 'Sigue, de lado a lado sin soltar…' : 'Arrastra a lo largo de la línea discontinua'}
+                  </p>
+                  <button onClick={autoCut} className="mt-2 text-[11px] font-bold text-slate-500 underline-offset-2 hover:text-slate-300 hover:underline">Abrir sin deslizar</button>
+                </>
+              )}
+            </section>
+          )}
+
+          {/* ─── REVELADO: MAZO EN LA MANO ─── */}
+          {stage === 'reveal' && result && current && (
+            <section className="flex w-full max-w-xl flex-col items-center text-center">
+              <div className="flex w-full items-center justify-between text-xs font-black text-slate-300">
+                <span className="flex gap-1.5"><Layers className="h-4 w-4 text-amber-300" />CARTA {index + 1} / {cards.length}</span>
+                <button onClick={() => setStage('summary')} className="text-slate-500 hover:text-white">Ver todas →</button>
+              </div>
+              <div className="mt-2 flex gap-1" aria-hidden>
+                {cards.map((c, i) => (
+                  <i key={i} className={'h-1.5 rounded-full ' + (i < index ? 'w-1.5 ' + (c.hit ? 'bg-amber-300' : 'bg-emerald-400') : i === index ? 'w-7 bg-amber-300' : 'w-1.5 bg-white/15')} />
+                ))}
+              </div>
+              {result.godPack && index === 0 && <p className="god-pack-banner mt-3">✦ ¡GOD PACK! Todas las cartas son especiales ✦</p>}
+
+              <div className="reveal-stage mt-4">
+                {burst > 0 && flipped.has(index) && (
+                  <div key={burst} className={'reveal-burst ' + auraFor(current.card.rarity)} aria-hidden><i /><i /><i /></div>
+                )}
+                {/* Cartas que quedan debajo en el mazo */}
+                {cards.length - index > 2 && <CardBack className="stack-under stack-depth-2" />}
+                {cards.length - index > 1 && <CardBack className="stack-under stack-depth-1" />}
+
+                <div
+                  key={index}
+                  className={'swipe-card ' + (dragging && !needsFlip ? 'is-dragging ' : '') + (leaving ? 'is-leaving ' : '') + (needsFlip ? 'is-facedown ' + auraFor(current.card.rarity) : '')}
+                  style={{ transform: cardTransform }}
+                  onPointerDown={onCardPointerDown}
+                  onPointerMove={onCardPointerMove}
+                  onPointerUp={onCardPointerUp}
+                  onPointerCancel={() => { drag.current = null; setDragging(false); setOffset({ x: 0, y: 0 }); }}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={needsFlip ? 'Carta boca abajo. Pulsa para darle la vuelta.' : `${current.card.name}. Pulsa para ver la siguiente.`}
+                >
+                  <div className={'flip-inner ' + (current.hit && !needsFlip ? 'is-flipped' : '') + (current.hit ? '' : ' no-flip')}>
+                    <div className="flip-face flip-front">
+                      <PokemonCardView card={current.card} aspect={getCardAspect(current.card)} />
+                    </div>
+                    {current.hit && <div className="flip-face flip-back"><CardBack /></div>}
+                  </div>
+                  {!needsFlip && (
+                    <div className="card-tags">
+                      {current.isNew && <span className="tag-new">NUEVA</span>}
+                      {current.slotType !== 'COMMON' && current.slotType !== 'UNCOMMON' && <span className="tag-slot">{SLOT_LABELS[current.slotType]}</span>}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <p className={'mt-5 flex items-center gap-1 text-xs font-black ' + (current.hit && !needsFlip ? 'text-amber-300' : 'text-slate-400')}>
+                {needsFlip ? <>Toca la carta para darle la vuelta</> : current.hit ? <><Crown className="h-4 w-4" /> {rarityBadges[current.card.rarity].label}</> : <>Desliza o pulsa → para continuar</>}
+              </p>
+              {result.pityTriggered && index === cards.length - 1 && !needsFlip && (
+                <p className="mt-1 text-[11px] font-bold text-amber-200/80">Garantía de Legendaria activada en este sobre.</p>
+              )}
+            </section>
+          )}
+
+          {/* ─── RESUMEN ─── */}
+          {stage === 'summary' && result && (
+            <section className="w-full">
+              <div className="flex flex-col gap-4 rounded-2xl border border-emerald-400/25 bg-emerald-400/10 p-5 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h3 className="flex gap-2 font-black text-white"><ShieldCheck className="h-5 w-5 text-emerald-300" />{result.godPack ? '¡GOD PACK abierto!' : result.packName}</h3>
+                  <p className="mt-1 text-xs text-slate-300">
+                    {cards.length} cartas · {cards.filter((c) => c.isNew).length} nuevas en tu colección · {cards.filter((c) => c.hit).length} especiales
+                  </p>
+                  <p className="mt-1 text-[11px] text-slate-400">Legendaria garantizada en {result.packsUntilPity} {result.packsUntilPity === 1 ? 'sobre' : 'sobres'} como máximo.</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {nextSealed && (
+                    <button onClick={() => placeOnTable(nextSealed)} className="flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-xs font-black text-white hover:bg-red-500">
+                      <Package className="h-4 w-4" />Abrir siguiente ({sealed.length})
+                    </button>
+                  )}
+                  <button onClick={backToShop} className="flex items-center gap-2 rounded-xl border border-white/15 px-4 py-2.5 text-xs font-black text-white hover:bg-white/10">
+                    <RotateCcw className="h-4 w-4" />Volver a la tienda
+                  </button>
+                </div>
+              </div>
+              <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                {cards.map((c) => (
+                  <div key={c.card.id} className={'relative ' + (c.hit ? 'summary-hit ' + auraFor(c.card.rarity) : '')}>
+                    {c.isNew && <span className="tag-new absolute -top-2 left-2 z-20">NUEVA</span>}
+                    <PokemonCardView compact card={c.card} aspect={getCardAspect(c.card)} />
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+        </main>
       </div>
     </div>
   );

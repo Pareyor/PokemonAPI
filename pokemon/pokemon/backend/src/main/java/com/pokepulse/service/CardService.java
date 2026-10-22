@@ -2,6 +2,7 @@ package com.pokepulse.service;
 
 import com.pokepulse.dto.PokemonCardRequestDTO;
 import com.pokepulse.dto.PokemonCardResponseDTO;
+import com.pokepulse.entity.AppUser;
 import com.pokepulse.entity.CardRarity;
 import com.pokepulse.entity.PokemonCard;
 import com.pokepulse.entity.PokemonType;
@@ -27,9 +28,10 @@ public class CardService {
     }
 
     @Transactional(readOnly = true)
-    public List<PokemonCardResponseDTO> getAll(String search, PokemonType type, CardRarity rarity, Boolean inDeck) {
+    public List<PokemonCardResponseDTO> getAll(AppUser user, String search, PokemonType type, CardRarity rarity, Boolean inDeck) {
         Specification<PokemonCard> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
+            predicates.add(cb.equal(root.get("ownerId"), user.getId()));
 
             if (search != null && !search.trim().isEmpty()) {
                 String pattern = "%" + search.trim().toLowerCase() + "%";
@@ -59,15 +61,14 @@ public class CardService {
     }
 
     @Transactional(readOnly = true)
-    public PokemonCardResponseDTO getById(Long id) {
-        PokemonCard card = cardRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("Carta no encontrada con ID: " + id));
-        return mapToDTO(card);
+    public PokemonCardResponseDTO getById(AppUser user, Long id) {
+        return mapToDTO(findOwned(user, id));
     }
 
     @Transactional
-    public PokemonCardResponseDTO create(PokemonCardRequestDTO dto) {
+    public PokemonCardResponseDTO create(AppUser user, PokemonCardRequestDTO dto) {
         PokemonCard card = new PokemonCard();
+        card.setOwnerId(user.getId());
         card.setPokedexNumber(dto.pokedexNumber());
         card.setName(dto.name());
         card.setType(dto.type());
@@ -93,9 +94,11 @@ public class CardService {
     }
 
     @Transactional
-    public PokemonCardResponseDTO update(Long id, PokemonCardRequestDTO dto) {
-        PokemonCard card = cardRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("Carta no encontrada con ID: " + id));
+    public PokemonCardResponseDTO update(AppUser user, Long id, PokemonCardRequestDTO dto) {
+        PokemonCard card = findOwned(user, id);
+        if (!Boolean.TRUE.equals(card.getIsCustom())) {
+            throw new IllegalStateException("Solo puedes editar cartas forjadas; las cartas de sobre no se pueden modificar.");
+        }
 
         card.setName(dto.name());
         card.setType(dto.type());
@@ -119,12 +122,12 @@ public class CardService {
     }
 
     @Transactional
-    public PokemonCardResponseDTO toggleDeck(Long id) {
-        PokemonCard card = cardRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("Carta no encontrada con ID: " + id));
+    public PokemonCardResponseDTO toggleDeck(AppUser user, Long id) {
+        PokemonCard card = findOwned(user, id);
 
         if (!card.getIsInDeck()) {
-            long currentDeckCount = cardRepository.countByIsInDeckTrue();
+            profileService.lockUser(user.getId()); // serializa altas concurrentes en el mazo
+            long currentDeckCount = cardRepository.countByOwnerIdAndIsInDeckTrue(user.getId());
             if (currentDeckCount >= 5) {
                 throw new IllegalStateException("Tu mazo de combate ya tiene el máximo permitido de 5 cartas.");
             }
@@ -138,17 +141,11 @@ public class CardService {
     }
 
     @Transactional
-    public PokemonCardResponseDTO levelUp(Long id) {
-        PokemonCard card = cardRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("Carta no encontrada con ID: " + id));
+    public PokemonCardResponseDTO levelUp(AppUser user, Long id) {
+        PokemonCard card = findOwned(user, id);
 
-        var profile = profileService.getOrCreateProfile();
-        int cost = card.getLevel() * 25;
-        if (profile.getCoins() < cost) {
-            throw new IllegalStateException("Monedas insuficientes. Necesitas " + cost + " monedas para subir de nivel.");
-        }
-
-        profile.setCoins(profile.getCoins() - cost);
+        AppUser wallet = profileService.lockUser(user.getId());
+        profileService.spendCoins(wallet, card.getLevel() * 25);
         card.setLevel(card.getLevel() + 1);
         card.setHp(card.getHp() + 10);
         card.setAttack(card.getAttack() + 5);
@@ -162,21 +159,28 @@ public class CardService {
     }
 
     @Transactional
-    public void delete(Long id) {
-        PokemonCard card = cardRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("Carta no encontrada con ID: " + id));
+    public void delete(AppUser user, Long id) {
+        PokemonCard card = findOwned(user, id);
 
-        // Recycling reward
-        int recycleBonus = switch (card.getRarity()) {
+        // Las cartas forjadas son gratis de crear: reciclarlas no puede generar monedas
+        int recycleBonus = Boolean.TRUE.equals(card.getIsCustom()) ? 0 : switch (card.getRarity()) {
             case COMMON -> 15;
             case UNCOMMON -> 35;
             case RARE -> 75;
             case EPIC -> 150;
             case LEGENDARY -> 300;
+            case SECRET_RARE -> 1000;
         };
-        profileService.addCoins(recycleBonus);
+        AppUser wallet = profileService.lockUser(user.getId());
+        wallet.setCoins(wallet.getCoins() + recycleBonus);
 
         cardRepository.delete(card);
+    }
+
+    /** 404 tanto si no existe como si es de otro usuario, para no revelar qué IDs existen. */
+    private PokemonCard findOwned(AppUser user, Long id) {
+        return cardRepository.findByIdAndOwnerId(id, user.getId())
+            .orElseThrow(() -> new ResourceNotFoundException("Carta no encontrada con ID: " + id));
     }
 
     public PokemonCardResponseDTO mapToDTO(PokemonCard c) {

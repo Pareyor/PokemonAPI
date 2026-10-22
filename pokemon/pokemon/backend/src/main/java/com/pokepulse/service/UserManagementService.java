@@ -6,6 +6,11 @@ import com.pokepulse.dto.UserDTO;
 import com.pokepulse.entity.AppUser;
 import com.pokepulse.entity.UserRole;
 import com.pokepulse.exception.ResourceNotFoundException;
+import com.pokepulse.repository.BattleRecordRepository;
+import com.pokepulse.repository.BattleSessionRepository;
+import com.pokepulse.repository.PokemonCardRepository;
+import com.pokepulse.repository.SealedPackRepository;
+import com.pokepulse.repository.TrainerProfileRepository;
 import com.pokepulse.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,10 +22,25 @@ public class UserManagementService {
 
     private final UserRepository userRepository;
     private final AuthService authService;
+    private final TrainerProfileService profileService;
+    private final PokemonCardRepository cardRepository;
+    private final SealedPackRepository sealedPackRepository;
+    private final BattleRecordRepository battleRepository;
+    private final TrainerProfileRepository profileRepository;
+    private final BattleSessionRepository battleSessionRepository;
 
-    public UserManagementService(UserRepository userRepository, AuthService authService) {
+    public UserManagementService(UserRepository userRepository, AuthService authService, TrainerProfileService profileService,
+                                 PokemonCardRepository cardRepository, SealedPackRepository sealedPackRepository,
+                                 BattleRecordRepository battleRepository, TrainerProfileRepository profileRepository,
+                                 BattleSessionRepository battleSessionRepository) {
         this.userRepository = userRepository;
         this.authService = authService;
+        this.profileService = profileService;
+        this.cardRepository = cardRepository;
+        this.sealedPackRepository = sealedPackRepository;
+        this.battleRepository = battleRepository;
+        this.profileRepository = profileRepository;
+        this.battleSessionRepository = battleSessionRepository;
     }
 
     private void requireAdmin(AppUser requester) {
@@ -72,7 +92,9 @@ public class UserManagementService {
             dto.coins() != null ? dto.coins() : 500
         );
 
-        return toDTO(userRepository.save(newUser));
+        newUser = userRepository.save(newUser);
+        profileService.createNewTrainer(newUser);
+        return toDTO(newUser);
     }
 
     @Transactional
@@ -123,6 +145,12 @@ public class UserManagementService {
             throw new ResourceNotFoundException("Usuario con id " + id + " no encontrado.");
         }
 
+        // Sin claves foráneas entre tablas: limpiamos a mano todo lo que pertenece al usuario
+        cardRepository.deleteByOwnerId(id);
+        sealedPackRepository.deleteByOwnerId(id);
+        battleRepository.deleteByOwnerId(id);
+        battleSessionRepository.deleteByOwnerId(id);
+        profileRepository.deleteByUserId(id);
         userRepository.deleteById(id);
     }
 

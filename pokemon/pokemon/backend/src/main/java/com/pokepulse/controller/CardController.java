@@ -2,8 +2,10 @@ package com.pokepulse.controller;
 
 import com.pokepulse.dto.PokemonCardRequestDTO;
 import com.pokepulse.dto.PokemonCardResponseDTO;
+import com.pokepulse.entity.AppUser;
 import com.pokepulse.entity.CardRarity;
 import com.pokepulse.entity.PokemonType;
+import com.pokepulse.security.CurrentUser;
 import com.pokepulse.service.CardService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -28,48 +30,49 @@ public class CardController {
     @GetMapping
     @Operation(summary = "Listar todas las cartas de la colección con filtros")
     public ResponseEntity<List<PokemonCardResponseDTO>> getAll(
+        @CurrentUser AppUser user,
         @RequestParam(required = false) String search,
         @RequestParam(required = false) PokemonType type,
         @RequestParam(required = false) CardRarity rarity,
         @RequestParam(required = false) Boolean inDeck
     ) {
-        return ResponseEntity.ok(cardService.getAll(search, type, rarity, inDeck));
+        return ResponseEntity.ok(cardService.getAll(user, search, type, rarity, inDeck));
     }
 
     @GetMapping("/{id}")
     @Operation(summary = "Obtener carta por ID")
-    public ResponseEntity<PokemonCardResponseDTO> getById(@PathVariable Long id) {
-        return ResponseEntity.ok(cardService.getById(id));
+    public ResponseEntity<PokemonCardResponseDTO> getById(@CurrentUser AppUser user, @PathVariable Long id) {
+        return ResponseEntity.ok(cardService.getById(user, id));
     }
 
     @PostMapping
     @Operation(summary = "Crear carta personalizada (Card Creator)")
-    public ResponseEntity<PokemonCardResponseDTO> create(@Valid @RequestBody PokemonCardRequestDTO dto) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(cardService.create(dto));
+    public ResponseEntity<PokemonCardResponseDTO> create(@CurrentUser AppUser user, @Valid @RequestBody PokemonCardRequestDTO dto) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(cardService.create(user, dto));
     }
 
     @PutMapping("/{id}")
     @Operation(summary = "Modificar estadísticas o poderes de una carta")
-    public ResponseEntity<PokemonCardResponseDTO> update(@PathVariable Long id, @Valid @RequestBody PokemonCardRequestDTO dto) {
-        return ResponseEntity.ok(cardService.update(id, dto));
+    public ResponseEntity<PokemonCardResponseDTO> update(@CurrentUser AppUser user, @PathVariable Long id, @Valid @RequestBody PokemonCardRequestDTO dto) {
+        return ResponseEntity.ok(cardService.update(user, id, dto));
     }
 
     @PatchMapping("/{id}/deck")
     @Operation(summary = "Añadir o remover carta del mazo de combate (máx 5)")
-    public ResponseEntity<PokemonCardResponseDTO> toggleDeck(@PathVariable Long id) {
-        return ResponseEntity.ok(cardService.toggleDeck(id));
+    public ResponseEntity<PokemonCardResponseDTO> toggleDeck(@CurrentUser AppUser user, @PathVariable Long id) {
+        return ResponseEntity.ok(cardService.toggleDeck(user, id));
     }
 
     @PostMapping("/{id}/level-up")
     @Operation(summary = "Subir de nivel la carta incrementando sus estadísticas")
-    public ResponseEntity<PokemonCardResponseDTO> levelUp(@PathVariable Long id) {
-        return ResponseEntity.ok(cardService.levelUp(id));
+    public ResponseEntity<PokemonCardResponseDTO> levelUp(@CurrentUser AppUser user, @PathVariable Long id) {
+        return ResponseEntity.ok(cardService.levelUp(user, id));
     }
 
     @DeleteMapping("/{id}")
     @Operation(summary = "Reciclar/eliminar carta y obtener monedas a cambio")
-    public ResponseEntity<Void> delete(@PathVariable Long id) {
-        cardService.delete(id);
+    public ResponseEntity<Void> delete(@CurrentUser AppUser user, @PathVariable Long id) {
+        cardService.delete(user, id);
         return ResponseEntity.noContent().build();
     }
 }

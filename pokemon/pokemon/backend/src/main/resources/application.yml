@@ -17,6 +17,11 @@ spring:
       hibernate:
         format_sql: true
 
+pokepulse:
+  dev:
+    # Modo pruebas: comprar sobres y subir de nivel no descuenta monedas. Ponlo a false para jugar de verdad.
+    infinite-coins: true
+
 springdoc:
   api-docs:
     path: /v3/api-docs

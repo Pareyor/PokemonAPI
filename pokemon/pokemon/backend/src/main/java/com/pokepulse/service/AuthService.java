@@ -4,10 +4,8 @@ import com.pokepulse.dto.AuthResponseDTO;
 import com.pokepulse.dto.LoginRequestDTO;
 import com.pokepulse.dto.RegisterRequestDTO;
 import com.pokepulse.entity.AppUser;
-import com.pokepulse.entity.TrainerProfile;
 import com.pokepulse.entity.UserRole;
 import com.pokepulse.exception.ResourceNotFoundException;
-import com.pokepulse.repository.TrainerProfileRepository;
 import com.pokepulse.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,14 +21,14 @@ import java.util.concurrent.ConcurrentHashMap;
 public class AuthService {
 
     private final UserRepository userRepository;
-    private final TrainerProfileRepository profileRepository;
+    private final TrainerProfileService profileService;
 
     // Almacén de sesiones activas en memoria: Token -> ID de Usuario
     private final Map<String, Long> activeTokens = new ConcurrentHashMap<>();
 
-    public AuthService(UserRepository userRepository, TrainerProfileRepository profileRepository) {
+    public AuthService(UserRepository userRepository, TrainerProfileService profileService) {
         this.userRepository = userRepository;
-        this.profileRepository = profileRepository;
+        this.profileService = profileService;
     }
 
     public String hashPassword(String rawPassword) {
@@ -62,9 +60,6 @@ public class AuthService {
         String token = UUID.randomUUID().toString().replace("-", "");
         activeTokens.put(token, user.getId());
 
-        // Sincronizar monedas con el perfil activo de entrenador si existe
-        syncTrainerProfile(user);
-
         return new AuthResponseDTO(
             token,
             user.getId(),
@@ -95,8 +90,8 @@ public class AuthService {
         String token = UUID.randomUUID().toString().replace("-", "");
         activeTokens.put(token, newUser.getId());
 
-        // Sincronizar o crear perfil de entrenador
-        syncTrainerProfile(newUser);
+        // Perfil TCG propio con mazo de bienvenida
+        profileService.createNewTrainer(newUser);
 
         return new AuthResponseDTO(
             token,
@@ -134,12 +129,5 @@ public class AuthService {
             token = token.substring(7).trim();
         }
         activeTokens.remove(token);
-    }
-
-    private void syncTrainerProfile(AppUser user) {
-        TrainerProfile profile = profileRepository.findFirstByOrderByIdAsc()
-            .orElseGet(() -> new TrainerProfile(user.getTrainerName()));
-        profile.setName(user.getTrainerName());
-        profileRepository.save(profile);
     }
 }

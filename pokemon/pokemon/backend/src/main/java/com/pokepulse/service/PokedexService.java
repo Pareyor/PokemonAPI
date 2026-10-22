@@ -27,7 +27,7 @@ public class PokedexService {
     }
 
     @Transactional(readOnly = true)
-    public List<PokedexItemDTO> getPokedex(String search, PokemonType type, String statusFilter) {
+    public List<PokedexItemDTO> getPokedex(Long userId, String search, PokemonType type, String statusFilter) {
         Specification<PokedexEntry> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
@@ -49,7 +49,7 @@ public class PokedexService {
         };
 
         List<PokedexEntry> entries = pokedexRepository.findAll(spec);
-        List<PokemonCard> userCards = cardRepository.findAll();
+        List<PokemonCard> userCards = cardRepository.findByOwnerId(userId);
 
         Map<Integer, List<PokemonCard>> cardsByNum = userCards.stream()
             .collect(Collectors.groupingBy(PokemonCard::getPokedexNumber));
@@ -90,14 +90,11 @@ public class PokedexService {
     }
 
     @Transactional(readOnly = true)
-    public PokedexStatsDTO getStats() {
+    public PokedexStatsDTO getStats(Long userId) {
         long totalSpecies = pokedexRepository.count();
-        List<PokemonCard> userCards = cardRepository.findAll();
-
-        Set<Integer> ownedSpeciesNumbers = userCards.stream()
-            .map(PokemonCard::getPokedexNumber)
-            .filter(num -> pokedexRepository.existsById(num))
-            .collect(Collectors.toSet());
+        // Una sola consulta en lugar de un existsById por carta
+        Set<Integer> ownedSpeciesNumbers = new HashSet<>(cardRepository.findOwnedPokedexNumbers(userId));
+        ownedSpeciesNumbers.retainAll(pokedexRepository.findAllIds());
 
         int ownedCount = ownedSpeciesNumbers.size();
         int missingCount = (int) Math.max(0, totalSpecies - ownedCount);

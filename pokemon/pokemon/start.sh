@@ -26,6 +26,11 @@ echo "✅ PostgreSQL listo en localhost:5434 (Base de datos: pokemon_db)"
 
 # 3. Levantar Backend Spring Boot
 echo "☕ [2/3] Levantando Backend Spring Boot en puerto 8089..."
+if [ ! -f "$DIR/backend/target/pokepulse-backend-1.0.0.jar" ]; then
+    echo "🔨 Compilando JAR de Backend con Maven..."
+    (cd "$DIR/backend" && mvn clean package -DskipTests)
+fi
+
 if [ -f "$DIR/.backend.pid" ]; then
     OLD_PID=$(cat "$DIR/.backend.pid")
     if ps -p "$OLD_PID" > /dev/null 2>&1; then
@@ -65,4 +70,8 @@ echo "================================================================"
 echo ""
 echo "⚛️  [3/3] Iniciando servidor de desarrollo Frontend (Vite)..."
 cd "$DIR/frontend"
+if [ ! -d "node_modules" ]; then
+    echo "📦 Instalando dependencias de Frontend (npm install)..."
+    npm install
+fi
 npm run dev

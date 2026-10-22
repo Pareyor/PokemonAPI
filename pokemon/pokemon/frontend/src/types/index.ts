@@ -8,9 +8,17 @@ export type PokemonType =
   | 'DRAGON'
   | 'DARK'
   | 'STEEL'
-  | 'NORMAL';
+  | 'NORMAL'
+  | 'BUG'
+  | 'FLYING'
+  | 'POISON'
+  | 'GROUND'
+  | 'ROCK'
+  | 'GHOST'
+  | 'ICE'
+  | 'FAIRY';
 
-export type CardRarity = 'COMMON' | 'UNCOMMON' | 'RARE' | 'EPIC' | 'LEGENDARY';
+export type CardRarity = 'COMMON' | 'UNCOMMON' | 'RARE' | 'EPIC' | 'LEGENDARY' | 'SECRET_RARE';
 
 export interface PokemonCard {
   id: number;
@@ -66,12 +74,65 @@ export interface TrainerProfile {
   battlesLost: number;
   totalCards: number;
   deckCardsCount: number;
+  bonusAvailableAt?: string | null;
+  infiniteCoins: boolean;
+}
+
+export type BoosterPackType = 'BASIC' | 'KANTO_MASTERS' | 'LEGENDARY_ECLIPSE';
+
+export type PackSlotType = 'COMMON' | 'UNCOMMON' | 'REVERSE_HOLO' | 'REVERSE_HOLO_HIT' | 'RARE' | 'GOD_PACK';
+
+export interface PackSlotOdds {
+  slotType: PackSlotType;
+  count: number;
+  odds: Partial<Record<CardRarity, number>>;
+}
+
+export interface PackCatalogItem {
+  id: BoosterPackType;
+  name: string;
+  description: string;
+  cost: number;
+  cardCount: number;
+  mascotPokedexNumber: number;
+  accentColor: string;
+  godPackChance: number;
+  pityThreshold: number;
+  packsUntilPity: number;
+  slots: PackSlotOdds[];
+}
+
+export interface SealedPack {
+  id: number;
+  packType: BoosterPackType;
+  packName: string;
+  purchasedAt: string;
+}
+
+export interface PackPurchaseResult {
+  purchased: SealedPack[];
+  coinsSpent: number;
+  coinsRemaining: number;
+}
+
+export interface PackCard {
+  slot: number;
+  slotType: PackSlotType;
+  hit: boolean;
+  isNew: boolean;
+  card: PokemonCard;
 }
 
 export interface BoosterPackResult {
+  packId: number;
+  packType: BoosterPackType;
   packName: string;
   coinsSpent: number;
   coinsRemaining: number;
+  godPack: boolean;
+  pityTriggered: boolean;
+  packsUntilPity: number;
+  cards: PackCard[];
   cardsObtained: PokemonCard[];
 }
 
@@ -82,7 +143,71 @@ export interface BattleOpponent {
   avatarUrl: string;
   difficulty: string;
   rewardCoins: number;
+  aiLevel: number;
   team: PokemonCard[];
+}
+
+export type BattleActionType = 'ATTACK' | 'SPECIAL' | 'GUARD' | 'SWITCH' | 'FORFEIT';
+export type BattleSide = 'PLAYER' | 'OPPONENT';
+export type StatusCondition = 'NONE' | 'BURN' | 'PARALYZE';
+
+export interface Combatant {
+  revealed: boolean;
+  cardId?: number;
+  pokedexNumber?: number;
+  name?: string;
+  type?: PokemonType;
+  rarity?: CardRarity;
+  holo?: boolean;
+  imageUrl?: string;
+  level?: number;
+  hp: number;
+  maxHp: number;
+  attack?: number;
+  defense?: number;
+  speed?: number;
+  move1Name?: string;
+  move1Power?: number;
+  move2Name?: string;
+  move2Power?: number;
+  move2Effect?: string;
+  status: StatusCondition;
+}
+
+export type BattleEventType =
+  | 'SUMMON' | 'MOVE' | 'DAMAGE' | 'HEAL' | 'GUARD' | 'GUARD_FAILED'
+  | 'STATUS' | 'STATUS_DAMAGE' | 'PARALYZED' | 'FAINT' | 'SWITCH' | 'END';
+
+export interface BattleEvent {
+  type: BattleEventType;
+  side: BattleSide;
+  text: string;
+  amount?: number;
+  hpAfter?: number;
+  effectiveness?: number;
+  critical?: boolean;
+  index?: number;
+}
+
+export interface BattleState {
+  battleId: number;
+  status: 'ACTIVE' | 'WON' | 'LOST';
+  turn: number;
+  maxTurns: number;
+  opponentId: string;
+  opponentName: string;
+  opponentAvatarUrl: string;
+  playerTeam: Combatant[];
+  playerActive: number;
+  playerEnergy: number;
+  playerGuardedLastTurn: boolean;
+  opponentTeam: Combatant[];
+  opponentActive: number;
+  opponentEnergy: number;
+  awaitingPlayerSwitch: boolean;
+  rewardCoins: number;
+  coinsEarned: number;
+  events: BattleEvent[];
 }
 
 export interface BattleRecord {
@@ -153,4 +278,3 @@ export interface UpdateUserRequest {
   role?: UserRole;
   coins?: number;
 }
-

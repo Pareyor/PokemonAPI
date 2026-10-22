@@ -22,6 +22,14 @@ const CARD_ASPECTS: {
   tagColor: string;
 }[] = [
   {
+    id: 'secret_rare',
+    name: '✦ Secret Rare God-Tier',
+    badge: 'GOD RARE ★★★★★',
+    icon: Crown,
+    description: 'Aura cósmica primordial, acabado full-art prismático, ataques divinos y efectos de impacto.',
+    tagColor: 'bg-fuchsia-950/90 text-amber-300 border-amber-400 shadow-md shadow-amber-400/20',
+  },
+  {
     id: 'classic',
     name: 'Clasica Mate',
     badge: 'EDICION BASE',
@@ -56,7 +64,7 @@ const CARD_ASPECTS: {
   {
     id: 'gold',
     name: 'Oro Legendario 24K',
-    badge: 'SECRET RARE',
+    badge: 'GOLD ULTRA',
     icon: Crown,
     description: 'Acabado en oro puro reluciente y grabados dorados.',
     tagColor: 'bg-yellow-950/80 text-yellow-300 border-yellow-500/50',
@@ -304,7 +312,7 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({
                 <span>{card.isInDeck ? 'Quitar del Mazo' : 'Poner en Mazo'}</span>
               </button>
 
-              <button
+              {card.isCustom && <button
                 onClick={() => {
                   onClose();
                   onEdit(card);
@@ -312,7 +320,7 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({
                 className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-300 bg-slate-800 hover:bg-slate-700 transition-colors"
               >
                 Editar Carta
-              </button>
+              </button>}
             </div>
           </div>
         </div>

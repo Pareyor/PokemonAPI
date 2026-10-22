@@ -10,5 +10,13 @@ public enum PokemonType {
     DRAGON,
     DARK,
     STEEL,
-    NORMAL
+    NORMAL,
+    BUG,
+    FLYING,
+    POISON,
+    GROUND,
+    ROCK,
+    GHOST,
+    ICE,
+    FAIRY
 }

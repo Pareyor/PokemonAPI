@@ -8,5 +8,6 @@ import java.util.Optional;
 
 @Repository
 public interface TrainerProfileRepository extends JpaRepository<TrainerProfile, Long> {
-    Optional<TrainerProfile> findFirstByOrderByIdAsc();
+    Optional<TrainerProfile> findByUserId(Long userId);
+    void deleteByUserId(Long userId);
 }

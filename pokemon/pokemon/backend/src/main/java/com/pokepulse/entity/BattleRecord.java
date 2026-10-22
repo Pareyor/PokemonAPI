@@ -11,6 +11,9 @@ public class BattleRecord {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "owner_id")
+    private Long ownerId;
+
     @Column(nullable = false)
     private String opponentName;
 
@@ -29,7 +32,8 @@ public class BattleRecord {
         this.timestamp = LocalDateTime.now();
     }
 
-    public BattleRecord(String opponentName, String result, Integer coinsEarned, String battleLog) {
+    public BattleRecord(Long ownerId, String opponentName, String result, Integer coinsEarned, String battleLog) {
+        this.ownerId = ownerId;
         this.opponentName = opponentName;
         this.result = result;
         this.coinsEarned = coinsEarned;
@@ -39,6 +43,8 @@ public class BattleRecord {
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
+
+    public Long getOwnerId() { return ownerId; }
 
     public String getOpponentName() { return opponentName; }
     public void setOpponentName(String opponentName) { this.opponentName = opponentName; }

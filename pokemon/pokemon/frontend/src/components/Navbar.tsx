@@ -1,6 +1,8 @@
 import React from 'react';
 import { TrainerProfile, AuthUser } from '../types';
-import { Coins, Swords, Gift, Sparkles, ExternalLink, Flame, BookOpen, Shield, LogIn, LogOut } from 'lucide-react';
+import { Coins, Swords, Gift, Sparkles, ExternalLink, Flame, BookOpen, Shield, LogIn, LogOut, Infinity as InfinityIcon } from 'lucide-react';
+
+export type AppTab = 'album' | 'pokedex' | 'arena' | 'packs' | 'admin';
 
 interface NavbarProps {
   profile: TrainerProfile | null;
@@ -11,7 +13,7 @@ interface NavbarProps {
   onOpenLogin: () => void;
   onLogout: () => void;
   activeTab: string;
-  onSelectTab: (tab: 'album' | 'pokedex' | 'arena' | 'packs' | 'admin') => void;
+  onSelectTab: (tab: AppTab) => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -43,17 +45,17 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <span className="text-lg font-black tracking-tight text-white">PokéPulse</span>
-                <span className="px-2 py-0.5 text-[10px] font-black bg-[#FFCB05]/20 text-[#FFCB05] rounded-full border border-[#FFCB05]/40">
-                  TCG ARENA
+                <span className="hidden text-lg font-black tracking-tight text-white min-[420px]:inline">PokéPulse</span>
+                <span className="hidden sm:inline px-2 py-0.5 text-[10px] font-black bg-[#FFCB05]/20 text-[#FFCB05] rounded-full border border-[#FFCB05]/40">
+                  TCG
                 </span>
               </div>
-              <p className="text-[11px] text-blue-300/70 hidden sm:block">Cartas Coleccionables &amp; Combates</p>
+              <p className="text-[11px] text-blue-300/70 hidden sm:block">Cartas · Sobres · Combates</p>
             </div>
           </div>
 
           {/* Navigation Tabs — Pokémon Blue style */}
-          <nav
+          {currentUser && <nav
             className="hidden md:flex items-center space-x-1 p-1 rounded-xl border border-[#3B4CCA]/40"
             style={{ background: 'rgba(13,27,62,0.8)' }}
           >
@@ -65,7 +67,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   : 'text-blue-200/70 hover:text-white hover:bg-white/5'
               }`}
             >
-              Colección ({profile?.totalCards || 0})
+              Colección TCG ({profile?.totalCards || 0})
             </button>
             <button
               onClick={() => onSelectTab('pokedex')}
@@ -76,7 +78,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               }`}
             >
               <BookOpen className="w-3.5 h-3.5" />
-              <span>Pokédex (151)</span>
+              <span>Pokédex TCG</span>
             </button>
             <button
               onClick={() => onSelectTab('arena')}
@@ -87,7 +89,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               }`}
             >
               <Swords className="w-3.5 h-3.5" />
-              <span>Arena de Combate</span>
+              <span>Arena TCG</span>
             </button>
             <button
               onClick={() => onSelectTab('packs')}
@@ -114,25 +116,35 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span>👑 Panel Admin</span>
               </button>
             )}
-          </nav>
+          </nav>}
 
           {/* Trainer Stats & CTAs */}
-          <div className="flex items-center space-x-2.5">
+          <div className="flex items-center space-x-1.5 sm:space-x-2.5">
+            {currentUser && (<>
             {/* PokéCoins — Pikachu yellow */}
             <div
               className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border border-[#FFCB05]/40 text-[#FFCB05] text-xs font-black shadow-sm"
               style={{ background: 'rgba(255,203,5,0.08)' }}
             >
               <Coins className="w-4 h-4 text-[#FFCB05]" />
-              <span>{profile?.coins ?? 0}</span>
+              {profile?.infiniteCoins ? (
+                <span className="flex items-center gap-1" title="Modo pruebas: las compras no gastan monedas">
+                  <InfinityIcon className="w-4 h-4" />
+                </span>
+              ) : (
+                <span>{profile?.coins ?? 0}</span>
+              )}
               <span className="text-[10px] text-[#FFCB05]/70 font-bold hidden sm:inline">PokéMonedas</span>
             </div>
 
             {/* Daily Bonus */}
             <button
               onClick={onClaimBonus}
-              title="Reclamar 150 monedas gratis"
-              className="hidden sm:inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-xl text-xs font-bold text-[#FFCB05] border border-[#FFCB05]/30 transition-colors hover:bg-[#FFCB05]/10"
+              disabled={!!profile?.bonusAvailableAt}
+              title={profile?.bonusAvailableAt
+                ? `Bono diario ya reclamado. Disponible el ${new Date(profile.bonusAvailableAt).toLocaleString('es-ES', { weekday: 'long', hour: '2-digit', minute: '2-digit' })}`
+                : 'Reclamar 150 monedas gratis (una vez al día)'}
+              className="hidden sm:inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-xl text-xs font-bold text-[#FFCB05] border border-[#FFCB05]/30 transition-colors hover:bg-[#FFCB05]/10 disabled:cursor-not-allowed disabled:opacity-40"
               style={{ background: 'rgba(255,203,5,0.05)' }}
             >
               <Gift className="w-3.5 h-3.5 text-[#FFCB05]" />
@@ -156,12 +168,13 @@ export const Navbar: React.FC<NavbarProps> = ({
               style={{ background: 'linear-gradient(135deg, #CC0000, #E83030)' }}
             >
               <Flame className="w-3.5 h-3.5" />
-              <span>Forjar Carta</span>
+              <span className="hidden sm:inline">Forjar Carta</span>
             </button>
+            </>)}
 
             {/* User Session & Auth Controls */}
             {currentUser ? (
-              <div className="flex items-center gap-2 pl-2 border-l border-slate-700/60">
+              <div className="flex items-center gap-2 sm:pl-2 sm:border-l border-slate-700/60">
                 <div className="hidden md:flex flex-col items-end">
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs font-black text-white">{currentUser.trainerName || currentUser.username}</span>
@@ -210,6 +223,29 @@ export const Navbar: React.FC<NavbarProps> = ({
             </a>
           </div>
         </div>
+
+        {/* Navegación móvil */}
+        {currentUser && (
+          <nav className="md:hidden -mx-4 flex gap-1 overflow-x-auto border-t border-white/5 px-4 py-2" aria-label="Secciones">
+            {([
+              ['album', 'Colección'],
+              ['pokedex', 'Pokédex'],
+              ['arena', 'Arena'],
+              ['packs', 'Sobres'],
+              ...(currentUser.role === 'ADMIN' ? [['admin', 'Admin']] : []),
+            ] as [AppTab, string][]).map(([tab, label]) => (
+              <button
+                key={tab}
+                onClick={() => onSelectTab(tab)}
+                className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold ${
+                  activeTab === tab ? 'bg-[#CC0000] text-white' : 'text-blue-200/70 hover:bg-white/5'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+        )}
       </div>
     </header>
   );

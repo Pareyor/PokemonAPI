@@ -2,15 +2,16 @@ import React from 'react';
 import { PokemonCard, PokemonType, CardRarity } from '../types';
 import { Shield, Swords, Zap, Heart, Sparkles, Plus, Check, Trash2, ArrowUpCircle, Eye } from 'lucide-react';
 
-export type CardAspect = 'classic' | 'holo' | 'cosmos' | 'animated' | 'gold';
+export type CardAspect = 'classic' | 'holo' | 'cosmos' | 'animated' | 'gold' | 'secret_rare';
 
 export const getCardAspect = (card: PokemonCard): CardAspect => {
+  if (card.rarity === 'SECRET_RARE') return 'secret_rare';
   if (card.rarity === 'LEGENDARY' && card.isHolo) return 'animated';
   if (card.rarity === 'EPIC' && card.isHolo) return 'holo';
   if (card.rarity === 'LEGENDARY') return 'cosmos';
   if (card.rarity === 'EPIC') return 'cosmos';
   if (card.rarity === 'RARE' && card.isHolo) return 'gold';
-  if (card.isHolo) return 'holo';
+  // Común / infrecuente reverse holo: diseño clásico con lámina brillante, no el diseño Mega EX de las épicas
   return 'classic';
 };
 
@@ -38,6 +39,14 @@ export const typeThemes: Record<
   DARK: { bg: 'from-slate-800/40 via-purple-950/30 to-slate-900/40', border: 'border-purple-500/40', badge: 'bg-purple-900/30 text-purple-300 border-purple-600/40', text: 'text-purple-400', lightBg: 'bg-purple-900/10' },
   STEEL: { bg: 'from-slate-600/30 via-gray-600/20 to-zinc-600/30', border: 'border-slate-400/50', badge: 'bg-slate-400/20 text-slate-300 border-slate-400/40', text: 'text-slate-300', lightBg: 'bg-slate-500/10' },
   NORMAL: { bg: 'from-slate-700/30 via-zinc-700/20 to-stone-700/30', border: 'border-slate-600/50', badge: 'bg-slate-600/20 text-slate-300 border-slate-600/40', text: 'text-slate-400', lightBg: 'bg-slate-600/10' },
+  BUG: { bg: 'from-lime-600/30 via-emerald-700/20 to-green-600/30', border: 'border-lime-500/50', badge: 'bg-lime-500/20 text-lime-300 border-lime-500/40', text: 'text-lime-400', lightBg: 'bg-lime-500/10' },
+  FLYING: { bg: 'from-sky-500/30 via-indigo-600/20 to-blue-500/30', border: 'border-sky-400/50', badge: 'bg-sky-500/20 text-sky-300 border-sky-400/40', text: 'text-sky-300', lightBg: 'bg-sky-500/10' },
+  POISON: { bg: 'from-purple-700/30 via-fuchsia-800/20 to-violet-900/30', border: 'border-purple-500/50', badge: 'bg-purple-600/20 text-purple-300 border-purple-500/40', text: 'text-purple-400', lightBg: 'bg-purple-600/10' },
+  GROUND: { bg: 'from-amber-700/30 via-yellow-800/20 to-orange-900/30', border: 'border-amber-600/50', badge: 'bg-amber-700/20 text-amber-300 border-amber-600/40', text: 'text-amber-400', lightBg: 'bg-amber-700/10' },
+  ROCK: { bg: 'from-stone-600/30 via-amber-900/20 to-yellow-900/30', border: 'border-stone-500/50', badge: 'bg-stone-600/20 text-stone-300 border-stone-500/40', text: 'text-stone-300', lightBg: 'bg-stone-600/10' },
+  GHOST: { bg: 'from-indigo-900/30 via-purple-950/20 to-slate-900/30', border: 'border-indigo-500/50', badge: 'bg-indigo-900/20 text-indigo-300 border-indigo-500/40', text: 'text-indigo-400', lightBg: 'bg-indigo-900/10' },
+  ICE: { bg: 'from-cyan-400/30 via-teal-500/20 to-sky-400/30', border: 'border-cyan-400/50', badge: 'bg-cyan-500/20 text-cyan-200 border-cyan-400/40', text: 'text-cyan-300', lightBg: 'bg-cyan-500/10' },
+  FAIRY: { bg: 'from-pink-400/30 via-rose-400/20 to-fuchsia-400/30', border: 'border-pink-400/50', badge: 'bg-pink-500/20 text-pink-200 border-pink-400/40', text: 'text-pink-300', lightBg: 'bg-pink-500/10' },
 };
 
 export const rarityBadges: Record<CardRarity, { label: string; color: string }> = {
@@ -46,6 +55,7 @@ export const rarityBadges: Record<CardRarity, { label: string; color: string }> 
   RARE: { label: 'Rara ★', color: 'text-blue-400 border-blue-500/40 bg-blue-950/40' },
   EPIC: { label: 'Épica ★★', color: 'text-purple-400 border-purple-500/40 bg-purple-950/40' },
   LEGENDARY: { label: 'LEGENDARIA ★★★', color: 'text-amber-300 border-amber-400/60 bg-amber-950/50 font-bold' },
+  SECRET_RARE: { label: '✦ SECRET RARE ★★★★★', color: 'text-yellow-200 border-yellow-300/80 bg-gradient-to-r from-amber-500 via-fuchsia-600 to-cyan-500 text-white font-black shadow-lg shadow-yellow-500/50' },
 };
 
 // Web Audio sound for screen attack impact
@@ -77,6 +87,39 @@ const playScreenAttackSound = () => {
       boom.start();
       boom.stop(ctx.currentTime + 0.5);
     }, 350);
+  } catch {}
+};
+
+// Web Audio sound for Secret Rare God-tier celestial burst impact
+const playSecretGodSound = () => {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const now = ctx.currentTime;
+    const chords = [523.25, 659.25, 783.99, 1046.5, 1318.5, 1567.98, 2093.0];
+    chords.forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, now + idx * 0.07);
+      gain.gain.setValueAtTime(0.25, now + idx * 0.07);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.07 + 1.4);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + idx * 0.07);
+      osc.stop(now + idx * 0.07 + 1.4);
+    });
+
+    const sub = ctx.createOscillator();
+    const subGain = ctx.createGain();
+    sub.type = 'sine';
+    sub.frequency.setValueAtTime(100, now);
+    sub.frequency.exponentialRampToValueAtTime(30, now + 0.8);
+    subGain.gain.setValueAtTime(0.6, now);
+    subGain.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
+    sub.connect(subGain);
+    subGain.connect(ctx.destination);
+    sub.start(now);
+    sub.stop(now + 0.8);
   } catch {}
 };
 
@@ -121,6 +164,15 @@ export const PokemonCardView: React.FC<PokemonCardViewProps> = ({
   const resolvedAspect = aspect !== undefined ? aspect : getCardAspect(card);
 
   const handleArtworkClick = (e: React.MouseEvent) => {
+    if (resolvedAspect === 'secret_rare') {
+      e.stopPropagation();
+      if (!isAttackingScreen) {
+        setIsAttackingScreen(true);
+        playSecretGodSound();
+        setTimeout(() => setIsAttackingScreen(false), 1800);
+      }
+      return;
+    }
     if (resolvedAspect === 'animated') {
       e.stopPropagation();
       if (!isAttackingScreen) {
@@ -135,11 +187,12 @@ export const PokemonCardView: React.FC<PokemonCardViewProps> = ({
 
   // Aspect CSS class calculation
   const getAspectClass = () => {
+    if (resolvedAspect === 'secret_rare') return 'card-aspect-secret_rare shadow-2xl shadow-yellow-500/40';
     if (resolvedAspect === 'holo') return 'card-aspect-holo shadow-2xl shadow-amber-500/30';
     if (resolvedAspect === 'cosmos') return 'card-aspect-cosmos shadow-lg shadow-amber-500/30';
     if (resolvedAspect === 'animated') return 'card-aspect-animated shadow-xl shadow-cyan-500/30';
     if (resolvedAspect === 'gold') return 'card-aspect-gold shadow-xl shadow-yellow-500/40';
-    if (resolvedAspect === 'classic') return 'shadow-md';
+    if (resolvedAspect === 'classic') return card.isHolo ? 'holo-card shadow-lg shadow-purple-500/15' : 'shadow-md';
     return card.isHolo ? 'holo-card shadow-lg shadow-purple-500/15' : 'shadow-md';
   };
 
@@ -160,7 +213,31 @@ export const PokemonCardView: React.FC<PokemonCardViewProps> = ({
         onClick={onView ? () => onView(card) : undefined}
         title={onView ? 'Clic para inspeccionar aspectos y detalles' : undefined}
       >
-        {resolvedAspect === 'holo' ? (
+        {resolvedAspect === 'secret_rare' ? (
+          <div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <span className="px-1.5 py-0.5 rounded bg-gradient-to-r from-amber-400 via-pink-500 to-purple-500 text-slate-950 font-black text-[9px] tracking-tight shadow-md animate-pulse">
+                  👑 GOD RARE
+                </span>
+                <span className="font-black text-sm text-yellow-200 tracking-tight truncate max-w-[130px] drop-shadow-[0_0_8px_rgba(255,215,0,0.8)]">
+                  ✦ {card.name}
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-xs font-black text-yellow-300 drop-shadow-[0_0_6px_rgba(255,215,0,0.9)]">
+                  HP {card.hp}
+                </span>
+                <span className="w-4 h-4 rounded-full bg-gradient-to-br from-amber-400 to-fuchsia-500 border border-yellow-200 flex items-center justify-center text-[8px] font-black text-slate-950 shadow">
+                  ✦
+                </span>
+              </div>
+            </div>
+            <span className="text-[8px] font-black text-amber-300/90 tracking-widest uppercase block mt-0.5">
+              Edición Corona Cósmica Secreta 001/151
+            </span>
+          </div>
+        ) : resolvedAspect === 'holo' ? (
           <div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
@@ -209,10 +286,14 @@ export const PokemonCardView: React.FC<PokemonCardViewProps> = ({
         <div
           onClick={handleArtworkClick}
           className={`my-2.5 relative rounded-xl overflow-visible bg-slate-950/70 border border-slate-800/80 aspect-video flex items-center justify-center p-2 cursor-pointer transition-colors ${
-            isAttackingScreen ? 'ring-2 ring-cyan-400 shadow-2xl' : 'group-hover:border-slate-700'
+            isAttackingScreen ? 'ring-2 ring-yellow-400 shadow-2xl' : 'group-hover:border-slate-700'
           }`}
         >
-          {resolvedAspect === 'gold' ? (
+          {resolvedAspect === 'secret_rare' ? (
+            <div className="absolute top-1 left-1.5 z-10 flex items-center gap-0.5 text-[9px] font-black text-white bg-gradient-to-r from-amber-500 via-fuchsia-600 to-cyan-500 px-2 py-0.5 rounded-md border border-yellow-300 shadow-lg shadow-yellow-500/40 animate-pulse">
+              <Sparkles className="w-2.5 h-2.5 text-yellow-200" /> ✦ SECRET RARE ✦
+            </div>
+          ) : resolvedAspect === 'gold' ? (
             <div className="absolute top-1 left-1.5 z-10 flex items-center gap-0.5 text-[9px] font-extrabold text-yellow-300 bg-yellow-950/90 px-1.5 py-0.5 rounded border border-yellow-400/60 shadow">
               <Sparkles className="w-2.5 h-2.5" /> ORO 24K
             </div>
@@ -229,6 +310,21 @@ export const PokemonCardView: React.FC<PokemonCardViewProps> = ({
               <Sparkles className="w-2.5 h-2.5 text-amber-300" /> MEGA EX
             </div>
           ) : null}
+
+          {/* Secret Rare Cosmic Stars & Supernova flares */}
+          {resolvedAspect === 'secret_rare' && (
+            <>
+              <div className="absolute -top-1 right-2 z-20 text-yellow-300 font-black text-2xl drop-shadow-[0_0_12px_rgba(255,215,0,1)] animate-bounce select-none pointer-events-none">
+                ✦
+              </div>
+              <div className="absolute bottom-1 left-2 z-20 text-fuchsia-400 font-black text-lg drop-shadow-[0_0_8px_rgba(236,72,153,1)] animate-pulse select-none pointer-events-none">
+                ✦
+              </div>
+              <div className="absolute top-1/2 left-3 z-20 text-cyan-300 font-black text-sm drop-shadow-[0_0_8px_rgba(56,189,248,1)] select-none pointer-events-none">
+                ✦
+              </div>
+            </>
+          )}
 
           {/* Mega EX Lightning bolts & 3D Japanese Katakana signature typography */}
           {resolvedAspect === 'holo' && (
@@ -309,7 +405,54 @@ export const PokemonCardView: React.FC<PokemonCardViewProps> = ({
         </div>
 
         {/* Moves / Powers Box */}
-        {resolvedAspect === 'holo' ? (
+        {resolvedAspect === 'secret_rare' ? (
+          <div className="space-y-1.5 text-xs">
+            {/* God Rare Celestial Ribbon */}
+            <div className="px-2 py-0.5 rounded-lg bg-gradient-to-r from-amber-500/30 via-fuchsia-600/30 to-cyan-500/30 border border-yellow-300/60 text-[8px] text-yellow-200 flex items-center justify-between shadow-sm">
+              <span className="font-black text-yellow-300 uppercase flex items-center gap-1">
+                ✦ PODER PRIMORDIAL CELESTIAL
+              </span>
+              <span className="text-[8px] font-black text-cyan-300 animate-pulse">
+                SECRET 001/151 ★★★★★
+              </span>
+            </div>
+
+            {/* Move 1 (Celestial Attack) */}
+            <div className="p-1.5 rounded-xl bg-slate-950/80 border border-amber-400/50 flex items-center justify-between shadow-md">
+              <div className="flex flex-col">
+                <span className="font-black text-yellow-200 text-[11px] drop-shadow-[0_0_5px_rgba(255,215,0,0.6)]">
+                  {card.move1Name}
+                </span>
+                {!compact && card.move1Description && (
+                  <span className="text-[9px] text-amber-100/70 line-clamp-1">{card.move1Description}</span>
+                )}
+              </div>
+              <span className="font-black text-yellow-300 text-xs shrink-0 pl-2">
+                {card.move1Damage} <span className="text-[9px] text-yellow-500">DMG</span>
+              </span>
+            </div>
+
+            {/* Move 2 (God-Tier Big Bang Attack) */}
+            <div className="p-1.5 rounded-xl bg-gradient-to-r from-purple-950/80 via-pink-950/70 to-slate-950/80 border border-pink-500/60 flex items-center justify-between shadow-lg">
+              <div className="flex flex-col">
+                <div className="flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-pink-400 shrink-0 animate-spin" />
+                  <span className="font-black text-pink-200 text-[11px] drop-shadow-[0_0_6px_rgba(244,114,182,0.8)]">
+                    {card.move2Name}
+                  </span>
+                </div>
+                {!compact && (
+                  <span className="text-[9px] font-bold text-pink-300">
+                    Efecto: ✦ IMPACTO TOTAL CÓSMICO (Daño x2)
+                  </span>
+                )}
+              </div>
+              <span className="font-black text-pink-400 text-sm shrink-0 pl-2 drop-shadow-[0_0_8px_rgba(244,114,182,0.9)]">
+                {card.move2Damage} <span className="text-[9px] text-pink-300">DMG</span>
+              </span>
+            </div>
+          </div>
+        ) : resolvedAspect === 'holo' ? (
           <div className="space-y-1.5 text-xs">
             {/* Mega Evolution Rule Ribbon */}
             <div className="px-2 py-0.5 rounded bg-gradient-to-r from-amber-950 via-slate-900 to-amber-950 border-y border-amber-500/60 text-[8px] text-amber-200 flex items-center justify-between">

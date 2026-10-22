@@ -2,7 +2,9 @@ package com.pokepulse.controller;
 
 import com.pokepulse.dto.PokedexItemDTO;
 import com.pokepulse.dto.PokedexStatsDTO;
+import com.pokepulse.entity.AppUser;
 import com.pokepulse.entity.PokemonType;
+import com.pokepulse.security.CurrentUser;
 import com.pokepulse.service.PokedexService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -25,16 +27,17 @@ public class PokedexController {
     @GetMapping
     @Operation(summary = "Consultar catálogo Pokédex con estado de tenencia (obtenido/no obtenido)")
     public ResponseEntity<List<PokedexItemDTO>> getPokedex(
+        @CurrentUser AppUser user,
         @RequestParam(required = false) String search,
         @RequestParam(required = false) PokemonType type,
         @RequestParam(required = false) String status
     ) {
-        return ResponseEntity.ok(pokedexService.getPokedex(search, type, status));
+        return ResponseEntity.ok(pokedexService.getPokedex(user.getId(), search, type, status));
     }
 
     @GetMapping("/stats")
-    @Operation(summary = "Obtener estadísticas globales de compleción de la Pokédex")
-    public ResponseEntity<PokedexStatsDTO> getStats() {
-        return ResponseEntity.ok(pokedexService.getStats());
+    @Operation(summary = "Obtener estadísticas de compleción de tu de la Pokédex")
+    public ResponseEntity<PokedexStatsDTO> getStats(@CurrentUser AppUser user) {
+        return ResponseEntity.ok(pokedexService.getStats(user.getId()));
     }
 }

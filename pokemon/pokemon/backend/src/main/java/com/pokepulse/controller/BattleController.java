@@ -1,51 +1,67 @@
 package com.pokepulse.controller;
 
+import com.pokepulse.dto.BattleActionRequestDTO;
 import com.pokepulse.dto.BattleOpponentDTO;
+import com.pokepulse.dto.BattleStartRequestDTO;
+import com.pokepulse.dto.BattleStateDTO;
+import com.pokepulse.entity.AppUser;
 import com.pokepulse.entity.BattleRecord;
-import com.pokepulse.repository.BattleRecordRepository;
+import com.pokepulse.security.CurrentUser;
 import com.pokepulse.service.BattleService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/battle")
-@Tag(name = "Combates", description = "Arena de combate contra entrenadores y líderes de gimnasio")
+@Tag(name = "Combates", description = "Combates por turnos resueltos en el servidor contra líderes y campeones")
 public class BattleController {
 
     private final BattleService battleService;
-    private final BattleRecordRepository battleRecordRepository;
 
-    public BattleController(BattleService battleService, BattleRecordRepository battleRecordRepository) {
+    public BattleController(BattleService battleService) {
         this.battleService = battleService;
-        this.battleRecordRepository = battleRecordRepository;
     }
 
     @GetMapping("/opponents")
-    @Operation(summary = "Listar líderes y entrenadores rivales disponibles para combatir")
+    @Operation(summary = "Rivales disponibles con su equipo completo, dificultad y recompensa")
     public ResponseEntity<List<BattleOpponentDTO>> getOpponents() {
         return ResponseEntity.ok(battleService.getOpponents());
     }
 
-    @PostMapping("/record")
-    @Operation(summary = "Registrar resultado de combate y reclamar monedas ganadas")
-    public ResponseEntity<Void> recordResult(@RequestBody Map<String, Object> body) {
-        String opponent = (String) body.get("opponent");
-        boolean won = Boolean.TRUE.equals(body.get("won"));
-        int coins = body.get("coins") != null ? ((Number) body.get("coins")).intValue() : 0;
-        String log = (String) body.get("log");
+    @PostMapping("/start")
+    @Operation(summary = "Empezar un combate con hasta 6 cartas de tu colección (un combate activo previo cuenta como derrota)")
+    public ResponseEntity<BattleStateDTO> start(@CurrentUser AppUser user, @Valid @RequestBody BattleStartRequestDTO request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(battleService.start(user, request));
+    }
 
-        battleService.recordBattleResult(opponent, won, coins, log);
-        return ResponseEntity.ok().build();
+    @PostMapping("/{id}/action")
+    @Operation(summary = "Jugar un turno: ATTACK, SPECIAL, GUARD, SWITCH (con switchTo) o FORFEIT. Devuelve los eventos del turno")
+    public ResponseEntity<BattleStateDTO> act(@CurrentUser AppUser user, @PathVariable Long id,
+                                              @Valid @RequestBody BattleActionRequestDTO request) {
+        return ResponseEntity.ok(battleService.act(user, id, request));
+    }
+
+    @GetMapping("/{id}")
+    @Operation(summary = "Estado actual de un combate")
+    public ResponseEntity<BattleStateDTO> get(@CurrentUser AppUser user, @PathVariable Long id) {
+        return ResponseEntity.ok(battleService.get(user, id));
+    }
+
+    @GetMapping("/active")
+    @Operation(summary = "Combate en curso para retomarlo tras recargar (204 si no hay)")
+    public ResponseEntity<BattleStateDTO> getActive(@CurrentUser AppUser user) {
+        return battleService.getActive(user).map(ResponseEntity::ok).orElse(ResponseEntity.noContent().build());
     }
 
     @GetMapping("/records")
-    @Operation(summary = "Histórico de combates recientes")
-    public ResponseEntity<List<BattleRecord>> getRecords() {
-        return ResponseEntity.ok(battleRecordRepository.findTop20ByOrderByTimestampDesc());
+    @Operation(summary = "Tus 20 combates más recientes")
+    public ResponseEntity<List<BattleRecord>> getRecords(@CurrentUser AppUser user) {
+        return ResponseEntity.ok(battleService.getRecentRecords(user));
     }
 }

@@ -9,5 +9,6 @@ public record BattleOpponentDTO(
     String avatarUrl,
     String difficulty,
     int rewardCoins,
+    int aiLevel,
     List<PokemonCardResponseDTO> team
 ) {}

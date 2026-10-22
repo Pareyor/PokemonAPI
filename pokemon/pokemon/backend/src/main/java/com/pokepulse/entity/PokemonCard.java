@@ -11,6 +11,11 @@ public class PokemonCard {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // Nullable a nivel de JPA para que ddl-auto=update pueda añadirla a tablas con datos;
+    // OwnershipMigration la rellena y la marca NOT NULL en la base de datos.
+    @Column(name = "owner_id")
+    private Long ownerId;
+
     @Column(nullable = false)
     private Integer pokedexNumber;
 
@@ -100,6 +105,9 @@ public class PokemonCard {
     // Getters and Setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
+
+    public Long getOwnerId() { return ownerId; }
+    public void setOwnerId(Long ownerId) { this.ownerId = ownerId; }
 
     public Integer getPokedexNumber() { return pokedexNumber; }
     public void setPokedexNumber(Integer pokedexNumber) { this.pokedexNumber = pokedexNumber; }

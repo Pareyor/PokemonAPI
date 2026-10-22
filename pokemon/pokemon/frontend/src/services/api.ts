@@ -3,8 +3,14 @@ import {
   PokemonCardFormData,
   TrainerProfile,
   BoosterPackResult,
+  BoosterPackType,
+  PackCatalogItem,
+  PackPurchaseResult,
+  SealedPack,
   BattleOpponent,
   BattleRecord,
+  BattleActionType,
+  BattleState,
   PokedexItem,
   PokedexStats,
   PokemonType,
@@ -40,7 +46,14 @@ function getHeaders(extra: Record<string, string> = {}): HeadersInit {
   return headers;
 }
 
+/** Se emite cuando el backend responde 401: la sesión no existe o ha caducado. */
+export const UNAUTHORIZED_EVENT = 'pokepulse:unauthorized';
+
 async function handleResponse<T>(res: Response): Promise<T> {
+  if (res.status === 401 && authToken) {
+    setAuthToken(null);
+    window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
+  }
   if (!res.ok) {
     let errorMsg = `Error HTTP ${res.status}`;
     try {
@@ -118,7 +131,33 @@ export const api = {
     return handleResponse<void>(res);
   },
 
-  async openPack(type: string): Promise<BoosterPackResult> {
+  async getPackCatalog(): Promise<PackCatalogItem[]> {
+    const res = await fetch(`${API_BASE}/packs/catalog`, { headers: getHeaders() });
+    return handleResponse<PackCatalogItem[]>(res);
+  },
+
+  async purchasePacks(type: BoosterPackType, quantity = 1): Promise<PackPurchaseResult> {
+    const res = await fetch(`${API_BASE}/packs/purchase?type=${type}&quantity=${quantity}`, {
+      method: 'POST',
+      headers: getHeaders(),
+    });
+    return handleResponse<PackPurchaseResult>(res);
+  },
+
+  async getSealedPacks(): Promise<SealedPack[]> {
+    const res = await fetch(`${API_BASE}/packs/sealed`, { headers: getHeaders() });
+    return handleResponse<SealedPack[]>(res);
+  },
+
+  async openSealedPack(id: number): Promise<BoosterPackResult> {
+    const res = await fetch(`${API_BASE}/packs/sealed/${id}/open`, {
+      method: 'POST',
+      headers: getHeaders(),
+    });
+    return handleResponse<BoosterPackResult>(res);
+  },
+
+  async openPack(type: BoosterPackType): Promise<BoosterPackResult> {
     const res = await fetch(`${API_BASE}/packs/open?type=${type}`, {
       method: 'POST',
       headers: getHeaders(),
@@ -144,13 +183,28 @@ export const api = {
     return handleResponse<BattleOpponent[]>(res);
   },
 
-  async recordBattle(opponent: string, won: boolean, coins: number, log: string): Promise<void> {
-    const res = await fetch(`${API_BASE}/battle/record`, {
+  async startBattle(opponentId: string, cardIds: number[]): Promise<BattleState> {
+    const res = await fetch(`${API_BASE}/battle/start`, {
       method: 'POST',
       headers: getHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ opponent, won, coins, log }),
+      body: JSON.stringify({ opponentId, cardIds }),
     });
-    return handleResponse<void>(res);
+    return handleResponse<BattleState>(res);
+  },
+
+  async battleAction(battleId: number, action: BattleActionType, switchTo?: number): Promise<BattleState> {
+    const res = await fetch(`${API_BASE}/battle/${battleId}/action`, {
+      method: 'POST',
+      headers: getHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ action, switchTo }),
+    });
+    return handleResponse<BattleState>(res);
+  },
+
+  async getActiveBattle(): Promise<BattleState | null> {
+    const res = await fetch(`${API_BASE}/battle/active`, { headers: getHeaders() });
+    if (res.status === 204) return null;
+    return handleResponse<BattleState>(res);
   },
 
   async getBattleRecords(): Promise<BattleRecord[]> {
